@@ -1,5 +1,7 @@
 package view;
 
+import viewmodel.TasksViewModel;
+
 import javax.swing.*;
 import java.awt.*;
 
@@ -7,6 +9,8 @@ public class MainFrame extends JFrame {
     private final model.command.CommandManager cmd = new model.command.CommandManager();
     private final TasksPanel tasksPanel = new TasksPanel();
     private final FiltersPanel filtersPanel = new FiltersPanel();
+
+    private TasksViewModel vm; // ← חדש
 
     public MainFrame() {
         super("Tasks – UI Skeleton");
@@ -17,12 +21,19 @@ public class MainFrame extends JFrame {
         add(tasksPanel, BorderLayout.CENTER);
         add(buildCrudBar(), BorderLayout.SOUTH);
 
+        // מסנן עדיין עובד על הפאנל (הפאנל כבר ידע למשוך מה-VM)
         filtersPanel.setApplyAction(e ->
                 tasksPanel.applyFilter(filtersPanel.getQuery(), filtersPanel.getState())
         );
 
         setSize(900, 600);
         setLocationRelativeTo(null);
+    }
+
+    // ← חדש: מוזרק מ-Main, ומועבר לפאנל
+    public void setViewModel(TasksViewModel vm) {
+        this.vm = vm;
+        this.tasksPanel.setViewModel(vm);
     }
 
     private JComponent buildCrudBar() {
@@ -37,7 +48,7 @@ public class MainFrame extends JFrame {
         p.add(add); p.add(edit); p.add(del);
         p.add(undo); p.add(redo);
 
-        // Add -> משתמש ב-AddTaskCommand
+        // Add -> משתמש ב-AddTaskCommand (ללא שינוי חתימות!)
         add.addActionListener(e -> {
             JTextField t = new JTextField();
             JTextField d = new JTextField();
@@ -46,10 +57,10 @@ public class MainFrame extends JFrame {
             int ok = JOptionPane.showConfirmDialog(this, form, "Add Task", JOptionPane.OK_CANCEL_OPTION);
             if (ok == JOptionPane.OK_OPTION) {
                 var command = new model.command.AddTaskCommand(
-                        tasksPanel,
+                        tasksPanel,                   // ← נשאר
                         t.getText().trim(),
                         d.getText().trim(),
-                        (String) s.getSelectedItem()
+                        (String) s.getSelectedItem() // enum name: "TO_DO"...
                 );
                 cmd.execute(command);
             }
@@ -92,5 +103,4 @@ public class MainFrame extends JFrame {
 
         return p;
     }
-
 }

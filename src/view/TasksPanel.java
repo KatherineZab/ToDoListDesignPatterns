@@ -1,157 +1,165 @@
 package view;
 
-import model.combinator.TaskFilter;
-import model.combinator.Filters;
+import model.ITask;
+import model.TaskState;
+import viewmodel.TasksViewModel;
+
 import javax.swing.*;
-import javax.swing.table.*;
+import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.List;
+import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class TasksPanel extends JPanel {
-    private final JTable table;
-    private final DefaultTableModel model;
-    private final TableRowSorter<DefaultTableModel> sorter;
-    private int nextId = 1;
+
+    private final DefaultTableModel model = new DefaultTableModel(
+            new Object[]{"ID","Title","Description","State"}, 0
+    ) {
+        @Override public boolean isCellEditable(int row, int column) { return false; }
+    };
+    private final JTable table = new JTable(model);
+    private TasksViewModel vm;
+
+    // נשמור גם את כל-המשימות לאחר סינון (לצורך applyFilter)
+    private List<ITask> currentView = java.util.Collections.emptyList();
 
     public TasksPanel() {
-        setLayout(new BorderLayout(8, 8));
-
-        model = new DefaultTableModel(new Object[]{"ID", "Title", "Description", "State"}, 0) {
-            @Override
-            public boolean isCellEditable(int r, int c) {
-                return false;
-            }
-
-            @Override
-            public Class<?> getColumnClass(int c) {
-                return c == 0 ? Integer.class : String.class;
-            }
-        };
-
-        table = new JTable(model);
-        table.setRowHeight(24);
-        sorter = new TableRowSorter<>(model);
-        table.setRowSorter(sorter);
+        setLayout(new BorderLayout());
         add(new JScrollPane(table), BorderLayout.CENTER);
-
-        addRow("Demo 1", "hello", "TO_DO");
-        addRow("Demo 2", "world", "IN_PROGRESS");
-        addRow("Demo 3", "finish ui", "COMPLETED");
     }
 
-    public int addRowReturningId(String title, String desc, String state) {
-        int id = nextId++;
-        model.addRow(new Object[]{id, title, desc, state});
-        return id;
+    // נקרא מתוך MainFrame.setViewModel(...)
+    public void setViewModel(TasksViewModel vm) {
+        this.vm = vm;
+        // כל שינוי ב-VM → רענון טבלה
+        vm.addListener(tasks -> SwingUtilities.invokeLater(this::refreshFromVM));
+        refreshFromVM();
     }
 
-    public void addRowWithId(int id, String title, String desc, String state) {
-        nextId = Math.max(nextId, id + 1);
-        model.addRow(new Object[]{id, title, desc, state});
+    private void refreshFromVM() {
+        if (vm == null) return;
+        // ברירת מחדל: ללא פילטר — מציגים הכול
+        currentView = vm.items();
+        render(currentView);
+    }
+
+    private void render(List<ITask> list) {
+        model.setRowCount(0);
+        for (ITask t : list) {
+            model.addRow(new Object[]{
+                    t.getId(),
+                    t.getTitle(),
+                    t.getDescription(),
+                    t.getState().name()   // מציגים "TO_DO"/"IN_PROGRESS"/"COMPLETED" כמו ב-Combo
+            });
+        }
+    }
+
+    // ===== מתודות קיימות שהפקודות שלכם קוראות =====
+
+    // Add (פעם ראשונה) – מחזיר ID אמיתי מה-DB
+    public int addRowReturningId(String title, String desc, String stateName) {
+        try {
+            int id = vm.addReturningId(title, desc, TaskState.valueOf(stateName));
+            // ה-VM כבר עשה load() והפעלת listener תרנדר מחדש. נחזיר את ה-id לפקודה.
+            return id;
+        } catch (Exception e) {
+            e.printStackTrace();
+            return -1;
+        }
+    }
+
+    // Add Redo – החזרה עם אותו ID
+    public void addRowWithId(int id, String title, String desc, String stateName) {
+        try {
+            vm.addWithId(id, title, desc, TaskState.valueOf(stateName));
+            // רענון קורה אוטומטית דרך listener
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
     public void removeRowById(int id) {
-        for (int i = 0; i < model.getRowCount(); i++) {
-            Object v = model.getValueAt(i, 0);
-            if (v instanceof Integer && (Integer) v == id) {
-                model.removeRow(i);
-                return;
-            }
-        }
+        try {
+            vm.delete(id);
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
-    public int selectedIdOrMinus1() {
-        int r = table.getSelectedRow();
-        return r < 0 ? -1 : (int) model.getValueAt(table.convertRowIndexToModel(r), 0);
+    public void setRowValuesById(int id, String newTitle, String newDesc, String newStateName) {
+        try {
+            vm.update(id, newTitle, newDesc, TaskState.valueOf(newStateName));
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
-    public void setRowValuesById(int id, String title, String desc, String state) {
-        for (int i = 0; i < model.getRowCount(); i++) {
-            if ((int) model.getValueAt(i, 0) == id) {
-                model.setValueAt(title, i, 1);
-                model.setValueAt(desc, i, 2);
-                model.setValueAt(state, i, 3);
-                return;
-            }
-        }
-    }
-
+    // משמש DeleteTaskCommand לצילום לפני מחיקה
     public Object[] snapshotById(int id) {
-        for (int i = 0; i < model.getRowCount(); i++) {
-            if ((int) model.getValueAt(i, 0) == id) {
-                return new Object[]{
-                        model.getValueAt(i, 0),
-                        model.getValueAt(i, 1),
-                        model.getValueAt(i, 2),
-                        model.getValueAt(i, 3)
-                };
-            }
-        }
-        return null;
+        int idx = modelIndexById(id);
+        if (idx < 0) return null;
+        return new Object[]{
+                model.getValueAt(idx, 0),
+                model.getValueAt(idx, 1),
+                model.getValueAt(idx, 2),
+                model.getValueAt(idx, 3)
+        };
     }
 
     public int modelIndexById(int id) {
         for (int i = 0; i < model.getRowCount(); i++) {
-            Object v = model.getValueAt(i, 0);
-            if (v instanceof Integer && (Integer) v == id) return i;
+            Object val = model.getValueAt(i, 0);
+            int rowId = (val instanceof Integer) ? (Integer) val : Integer.parseInt(val.toString());
+            if (rowId == id) return i;
         }
         return -1;
     }
 
-    public void addRowWithIdAt(int modelIndex, int id, String title, String desc, String state) {
-        nextId = Math.max(nextId, id + 1);
-        model.insertRow(Math.max(0, Math.min(modelIndex, model.getRowCount())),
-                new Object[]{id, title, desc, state});
+    public void addRowWithIdAt(int index, int id, String t, String d, String stName) {
+        // קודם DB, וה-VM ירנדר מחדש
+        addRowWithId(id, t, d, stName);
     }
 
-    public void addRow(String title, String desc, String state) {
-        model.addRow(new Object[]{nextId++, title, desc, state});
-    }
+    // ===== עזר ל-MainFrame (כפתורי Edit/Delete) =====
 
-    public void editSelectedRow(String newTitle, String newDesc, String newState) {
-        int r = table.getSelectedRow();
-        if (r < 0) return;
-        int mr = table.convertRowIndexToModel(r);
-        model.setValueAt(newTitle, mr, 1);
-        model.setValueAt(newDesc, mr, 2);
-        model.setValueAt(newState, mr, 3);
-    }
-
-    public void deleteSelectedRow() {
-        int r = table.getSelectedRow();
-        if (r >= 0) model.removeRow(table.convertRowIndexToModel(r));
+    public int selectedIdOrMinus1() {
+        int viewRow = table.getSelectedRow();
+        if (viewRow < 0) return -1;
+        int modelRow = table.convertRowIndexToModel(viewRow);
+        Object val = model.getValueAt(modelRow, 0);
+        return (val instanceof Integer) ? (Integer) val : Integer.parseInt(val.toString());
     }
 
     public String currentTitle() {
-        int r = table.getSelectedRow();
-        return r >= 0 ? String.valueOf(model.getValueAt(table.convertRowIndexToModel(r), 1)) : "";
+        int viewRow = table.getSelectedRow();
+        if (viewRow < 0) return "";
+        int modelRow = table.convertRowIndexToModel(viewRow);
+        return Objects.toString(model.getValueAt(modelRow, 1), "");
     }
 
     public String currentDesc() {
-        int r = table.getSelectedRow();
-        return r >= 0 ? String.valueOf(model.getValueAt(table.convertRowIndexToModel(r), 2)) : "";
+        int viewRow = table.getSelectedRow();
+        if (viewRow < 0) return "";
+        int modelRow = table.convertRowIndexToModel(viewRow);
+        return Objects.toString(model.getValueAt(modelRow, 2), "");
     }
 
     public String currentState() {
-        int r = table.getSelectedRow();
-        return r >= 0 ? String.valueOf(model.getValueAt(table.convertRowIndexToModel(r), 3)) : "TO_DO";
+        int viewRow = table.getSelectedRow();
+        if (viewRow < 0) return "TO_DO";
+        int modelRow = table.convertRowIndexToModel(viewRow);
+        return Objects.toString(model.getValueAt(modelRow, 3), "TO_DO");
     }
 
-    // entry-point used by the UI
-    public void applyFilter(String text, String state) {
-        var f = Filters.textContains(text).and(Filters.stateIs(state));
-        applyFilter(f);
-    }
+    // ===== פילטר (נשאר בפאנל, מפשט חיבור ל-FiltersPanel הקיים) =====
 
-    // the only place that talks to JTable's RowFilter
-    public void applyFilter(TaskFilter f) {
-        sorter.setRowFilter(new RowFilter<>() {
-            @Override public boolean include(Entry<? extends DefaultTableModel, ? extends Integer> e) {
-                String title = String.valueOf(e.getValue(1));
-                String desc  = String.valueOf(e.getValue(2));
-                String state = String.valueOf(e.getValue(3));
-                return f.test(title, desc, state);   // <- single choke point
-            }
-        });
+    public void applyFilter(String query, String stateNameOrAll) {
+        if (vm == null) return;
+        var all = vm.items();
+        var q = query == null ? "" : query.trim().toLowerCase();
+        var filtered = all.stream()
+                .filter(t -> q.isEmpty() || (t.getTitle()!=null && t.getTitle().toLowerCase().contains(q))
+                        || (t.getDescription()!=null && t.getDescription().toLowerCase().contains(q)))
+                .filter(t -> "ALL".equals(stateNameOrAll)
+                        || t.getState().name().equals(stateNameOrAll))
+                .collect(Collectors.toList());
+        currentView = filtered;
+        render(filtered);
     }
-
 }

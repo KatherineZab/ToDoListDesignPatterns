@@ -12,14 +12,10 @@ public final class TasksDAODerby implements ITasksDAO {
     private static TasksDAODerby INSTANCE;
     private TasksDAODerby() {}
 
-    // Singleton ל-DAO (לפי הדרישות)
     public static synchronized TasksDAODerby getInstance() {
         if (INSTANCE == null) INSTANCE = new TasksDAODerby();
         return INSTANCE;
     }
-
-    private static TaskState stateFrom(String s) { return TaskState.valueOf(s); }
-    private static String stateTo(TaskState s) { return s.name(); }
 
     @Override
     public ITask[] getTasks() throws TasksDAOException {
@@ -33,7 +29,8 @@ public final class TasksDAODerby implements ITasksDAO {
                         rs.getInt("id"),
                         rs.getString("title"),
                         rs.getString("description"),
-                        stateFrom(rs.getString("state"))));
+                        TaskState.valueOf(rs.getString("state"))
+                ));
             }
             return list.toArray(ITask[]::new);
         } catch (SQLException e) {
@@ -53,7 +50,8 @@ public final class TasksDAODerby implements ITasksDAO {
                         rs.getInt("id"),
                         rs.getString("title"),
                         rs.getString("description"),
-                        stateFrom(rs.getString("state")));
+                        TaskState.valueOf(rs.getString("state"))
+                );
             }
         } catch (SQLException e) {
             throw new TasksDAOException("getTask failed (id=" + id + ")", e);
@@ -64,21 +62,67 @@ public final class TasksDAODerby implements ITasksDAO {
     public void addTask(ITask t) throws TasksDAOException {
         final String sql = "INSERT INTO tasks(title,description,state) VALUES(?,?,?)";
         try (Connection c = dao.Derby.instance().getConnection();
-             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+             PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, t.getTitle());
             ps.setString(2, t.getDescription());
-            ps.setString(3, stateTo(t.getState()));
+            ps.setString(3, t.getState().name());
             ps.executeUpdate();
-            try (ResultSet keys = ps.getGeneratedKeys()) {
-                if (keys.next()) {
-                    int newId = keys.getInt(1);
-                    // אפשר לשמור/להדפיס newId אם צריך
-                }
-            }
         } catch (SQLException e) {
             throw new TasksDAOException("addTask failed", e);
         }
     }
+
+    @Override
+    public int addTaskReturningId(ITask t) throws TasksDAOException {
+        final String sql = "INSERT INTO tasks(title,description,state) VALUES(?,?,?)";
+        try (Connection c = dao.Derby.instance().getConnection();
+             PreparedStatement ps = c.prepareStatement(sql, Statement.RETURN_GENERATED_KEYS)) {
+            ps.setString(1, t.getTitle());
+            ps.setString(2, t.getDescription());
+            ps.setString(3, t.getState().name());
+            ps.executeUpdate();
+            try (ResultSet keys = ps.getGeneratedKeys()) {
+                if (keys.next()) return keys.getInt(1);
+            }
+            throw new TasksDAOException("addTaskReturningId: no generated key");
+        } catch (SQLException e) {
+            throw new TasksDAOException("addTaskReturningId failed", e);
+        }
+    }
+
+    public void addTaskWithId(int id, ITask t) throws TasksDAOException {
+        final String deleteSql = "DELETE FROM tasks WHERE id=?";
+        final String insertSql = """
+        INSERT INTO tasks(id, title, description, state)
+        OVERRIDING SYSTEM VALUE
+        VALUES (?, ?, ?, ?)
+    """;
+        try (Connection c = dao.Derby.instance().getConnection()) {
+            c.setAutoCommit(false);
+            try (PreparedStatement del = c.prepareStatement(deleteSql);
+                 PreparedStatement ins = c.prepareStatement(insertSql)) {
+
+                del.setInt(1, id);
+                del.executeUpdate();
+
+                ins.setInt(1, id);
+                ins.setString(2, t.getTitle());
+                ins.setString(3, t.getDescription());
+                ins.setString(4, t.getState().name());
+                ins.executeUpdate();
+
+                c.commit();
+            } catch (SQLException e) {
+                c.rollback();
+                throw e;
+            } finally {
+                c.setAutoCommit(true);
+            }
+        } catch (SQLException e) {
+            throw new TasksDAOException("addTaskWithId failed (id=" + id + ")", e);
+        }
+    }
+
 
     @Override
     public void updateTask(ITask t) throws TasksDAOException {
@@ -87,7 +131,7 @@ public final class TasksDAODerby implements ITasksDAO {
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setString(1, t.getTitle());
             ps.setString(2, t.getDescription());
-            ps.setString(3, stateTo(t.getState()));
+            ps.setString(3, t.getState().name());
             ps.setInt(4, t.getId());
             int updated = ps.executeUpdate();
             if (updated == 0) throw new TasksDAOException("updateTask: id not found: " + t.getId());
@@ -117,4 +161,3 @@ public final class TasksDAODerby implements ITasksDAO {
         }
     }
 }
-
