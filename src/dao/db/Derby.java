@@ -1,0 +1,46 @@
+package dao;
+
+import java.sql.*;
+
+public final class Derby {
+    private static final String URL = "jdbc:derby:taskdb;create=true";
+    private static Derby INSTANCE;
+
+    private Derby() {
+        try {
+            //Class.forName("org.apache.derby.jdbc.EmbeddedDriver");
+            try (Connection c = DriverManager.getConnection(URL)) { ensureSchema(c); }
+        } catch (Exception e) {
+            throw new RuntimeException("Derby init failed", e);
+        }
+    }
+
+    public static synchronized Derby instance() {
+        if (INSTANCE == null) INSTANCE = new Derby();
+        return INSTANCE;
+    }
+
+    public Connection getConnection() throws SQLException {
+        return DriverManager.getConnection(URL);
+    }
+
+    private static void ensureSchema(Connection c) throws SQLException {
+        // טבלה בסיסית למשימות
+        final String create =
+                """
+                CREATE TABLE tasks(
+                  id INTEGER NOT NULL GENERATED ALWAYS AS IDENTITY (START WITH 1, INCREMENT BY 1),
+                  title VARCHAR(255) NOT NULL,
+                  description CLOB,
+                  state VARCHAR(40) NOT NULL,
+                  PRIMARY KEY (id)
+                )
+                """;
+        try (Statement s = c.createStatement()) {
+            s.executeUpdate(create);
+        } catch (SQLException e) {
+            // X0Y32 = "Table/View already exists" בדרבי — מתעלמים
+            if (!"X0Y32".equals(e.getSQLState())) throw e;
+        }
+    }
+}

@@ -1,17 +1,31 @@
 package app;
 
-//TIP To <b>Run</b> code, press <shortcut actionId="Run"/> or
-// click the <icon src="AllIcons.Actions.Execute"/> icon in the gutter.
-public class Main {
-    public static void main(String[] args) {
-        //TIP Press <shortcut actionId="ShowIntentionActions"/> with your caret at the highlighted text
-        // to see how IntelliJ IDEA suggests fixing it.
-        System.out.printf("Hello and welcome!");
+import dao.*;
+import model.*;
 
-        for (int i = 1; i <= 5; i++) {
-            //TIP Press <shortcut actionId="Debug"/> to start debugging your code. We have set one <icon src="AllIcons.Debugger.Db_set_breakpoint"/> breakpoint
-            // for you, but you can always add more by pressing <shortcut actionId="ToggleLineBreakpoint"/>.
-            System.out.println("i = " + i);
+public class Main {
+    public static void main(String[] args) throws Exception {
+        ITasksDAO dao = TasksDAODerby.getInstance();
+
+        try { dao.deleteTasks(); } catch (TasksDAOException ignored) {}
+
+        //dao.addTask(new TaskRecord(0, "Buy milk", "2% milk", TaskState.TODO));
+        dao.addTask(new TaskRecord(0, "Write report", "Visitor pattern", TaskState.IN_PROGRESS));
+        dao.addTask(new TaskRecord(0, "Pay bills", "Electricity", TaskState.COMPLETED));
+
+        System.out.println("All tasks:");
+        for (var t : dao.getTasks()) {
+            System.out.printf("#%d | %s | %s | %s%n",
+                    t.getId(), t.getTitle(), t.getDescription(), t.getState());
         }
+
+        var t2 = dao.getTask(2);
+        if (t2 != null) {
+            dao.updateTask(new TaskRecord(t2.getId(), t2.getTitle() + " (final)",
+                    t2.getDescription(), TaskState.COMPLETED));
+        }
+
+        dao.deleteTask(1);
+        System.out.println("Count after delete: " + dao.getTasks().length);
     }
 }
