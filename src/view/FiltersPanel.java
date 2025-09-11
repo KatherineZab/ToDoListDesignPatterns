@@ -7,7 +7,7 @@ import java.awt.event.ActionListener;
 public class FiltersPanel extends JPanel {
     private final JTextField query = new JTextField(22);
     private final JComboBox<String> state =
-            new JComboBox<>(new String[]{"ANY", "TO_DO", "IN_PROGRESS", "COMPLETED"});
+            new JComboBox<>(new String[]{"ALL", "TO_DO", "IN_PROGRESS", "COMPLETED"});
     private final JButton apply = new JButton("Apply");
 
     public FiltersPanel() {

@@ -12,7 +12,7 @@ public final class Filters {
     }
 
     public static TaskFilter stateIs(String st) {
-        if (st == null || "ANY".equals(st)) return any();
+        if (st == null || "ALL".equals(st)) return any();
         return (t,d,s) -> s.equals(st);
     }
 }
