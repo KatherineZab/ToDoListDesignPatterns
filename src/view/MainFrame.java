@@ -44,9 +44,10 @@ public class MainFrame extends JFrame {
         JButton del  = new JButton("Delete");
         JButton undo = new JButton("Undo");
         JButton redo = new JButton("Redo");
+        JButton prio = new JButton("Priority");
 
         p.add(add); p.add(edit); p.add(del);
-        p.add(undo); p.add(redo);
+        p.add(undo); p.add(redo); p.add(prio);
 
         // Add -> משתמש ב-AddTaskCommand (ללא שינוי חתימות!)
         add.addActionListener(e -> {
@@ -96,6 +97,8 @@ public class MainFrame extends JFrame {
                 cmd.execute(command);
             }
         });
+
+        prio.addActionListener(e -> tasksPanel.setPriorityForSelected());
 
         // Undo/Redo
         undo.addActionListener(e -> cmd.undo());

@@ -5,5 +5,4 @@ public interface ITask {
     String getTitle();
     String getDescription();
     TaskState getState();
-    void accept(TaskVisitor visitor);
 }
