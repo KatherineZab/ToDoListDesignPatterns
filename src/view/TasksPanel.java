@@ -12,6 +12,10 @@ import java.awt.*;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+// === [STRATEGY - IMPORTS] הוסיפי:
+import model.sort.TaskSortStrategy;
+import model.sort.ByPriority;
+
 
 public class TasksPanel extends JPanel {
 
@@ -24,6 +28,9 @@ public class TasksPanel extends JPanel {
 
     private final JTable table = new JTable(model);
     private TasksViewModel vm;
+    // === [STRATEGY - FIELD] הוסיפי:
+    private TaskSortStrategy sortStrategy = null; // null = ללא מיון
+
 
     private List<ITask> currentView = java.util.Collections.emptyList();
 
@@ -40,8 +47,14 @@ public class TasksPanel extends JPanel {
 
     private void refreshFromVM() {
         if (vm == null) return;
-        currentView = vm.items();
+        currentView = applySort(vm.items()); // ← מיון (אם הוגדר) לפני הרינדור
         render(currentView);
+    }
+
+    // === [STRATEGY - NEW METHOD] הוסיפי:
+    private List<ITask> applySort(List<ITask> list) {
+        if (sortStrategy == null) return list;
+        return list.stream().sorted(sortStrategy.comparator()).toList();
     }
 
     private void render(List<ITask> list) {
@@ -151,9 +164,20 @@ public class TasksPanel extends JPanel {
                 .filter(t -> "ALL".equals(stateNameOrAll)
                         || t.getState().name().equals(stateNameOrAll))
                 .collect(Collectors.toList());
-        currentView = filtered;
-        render(filtered);
+        currentView = applySort(filtered); // ← להפעיל Strategy אם פעיל
+        render(currentView);
     }
+    // === [STRATEGY - ACTIONS] הוסיפי:
+    public void sortByPriorityHighToLow() {
+        sortStrategy = new ByPriority();
+        if (currentView != null) render(applySort(currentView));
+    }
+
+    public void clearSort() {
+        sortStrategy = null;
+        if (currentView != null) render(currentView);
+    }
+
 
     // ===== Priority: עדכון ב-DB דרך ה-VM =====
 

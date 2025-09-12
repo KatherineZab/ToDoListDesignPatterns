@@ -45,7 +45,9 @@ public class MainFrame extends JFrame {
         JButton undo = new JButton("Undo");
         JButton redo = new JButton("Redo");
         JButton prio = new JButton("Priority");
-
+        JButton sortPrio  = new JButton("Sort: Priority");
+        JButton sortClear = new JButton("Sort: Clear");
+        p.add(sortPrio);p.add(sortClear);
         p.add(add); p.add(edit); p.add(del);
         p.add(undo); p.add(redo); p.add(prio);
 
@@ -103,6 +105,8 @@ public class MainFrame extends JFrame {
         // Undo/Redo
         undo.addActionListener(e -> cmd.undo());
         redo.addActionListener(e -> cmd.redo());
+        sortPrio.addActionListener(e -> tasksPanel.sortByPriorityHighToLow());
+        sortClear.addActionListener(e -> tasksPanel.clearSort());
 
         return p;
     }
