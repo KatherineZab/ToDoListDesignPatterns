@@ -1,6 +1,6 @@
 package view;
 
-import model.entity.ITask;
+import model.ITask;
 import java.util.List;
 
 public interface IView {

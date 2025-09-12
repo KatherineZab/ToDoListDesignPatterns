@@ -1,4 +1,3 @@
-// src/model/command/AddTaskCommand.java
 package model.command;
 
 import view.TasksPanel;
@@ -6,7 +5,7 @@ import view.TasksPanel;
 public class AddTaskCommand implements Command {
     private final TasksPanel panel;
     private final String title, desc, state;
-    private Integer generatedId = null; // היה int=-1 -> מחליפים ל-Integer
+    private Integer generatedId = null;
 
     public AddTaskCommand(TasksPanel panel, String title, String desc, String state) {
         this.panel = panel;
@@ -15,17 +14,18 @@ public class AddTaskCommand implements Command {
         this.state = state;
     }
 
-    @Override public void execute() {
+    @Override
+    public void execute() {
         if (generatedId == null) {
-            // הפעלה ראשונה: מייצרים ID חדש ושומרים
             generatedId = panel.addRowReturningId(title, desc, state);
         } else {
-            // Redo: משתמשים באותו ID שנשמר
-            panel.addRowWithId(generatedId, title, desc, state);
+            // For redo: just add again and get a new ID
+            generatedId = panel.addRowReturningId(title, desc, state);
         }
     }
 
-    @Override public void undo() {
+    @Override
+    public void undo() {
         if (generatedId != null) {
             panel.removeRowById(generatedId);
         }
