@@ -1,6 +1,5 @@
 package view;
 
-import java.util.stream.Collectors;
 
 import model.ITask;
 import model.TaskState;
@@ -9,12 +8,16 @@ import model.entity.Priority; // if Priority is elsewhere, adjust the import
 import viewmodel.TasksViewModel;
 
 
+
 import javax.swing.*;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
+
+import model.combinator.TaskFilter;
+import model.combinator.Filters;
 
 import model.sort.TaskSortStrategy;
 import model.sort.ByPriority;
@@ -70,22 +73,25 @@ public class TasksPanel extends JPanel {
         }
     }
 
-    // inside class TasksPanel
     public void applyFilter(String query, String stateNameOrAll) {
         if (vm == null) return;
 
         var all = vm.items();
-        var q = query == null ? "" : query.trim().toLowerCase();
+
+        // Use your Combinator pattern
+        TaskFilter textFilter = Filters.textContains(query);
+        TaskFilter stateFilter = Filters.stateIs(stateNameOrAll);
+        TaskFilter combinedFilter = textFilter.and(stateFilter);
 
         var filtered = all.stream()
-                .filter(t -> q.isEmpty()
-                        || (t.getTitle() != null && t.getTitle().toLowerCase().contains(q))
-                        || (t.getDescription() != null && t.getDescription().toLowerCase().contains(q)))
-                .filter(t -> "ALL".equals(stateNameOrAll)
-                        || t.getState().name().equals(stateNameOrAll))
+                .filter(task -> combinedFilter.test(
+                        task.getTitle(),
+                        task.getDescription(),
+                        task.getState().name()
+                ))
                 .collect(Collectors.toList());
 
-        currentView = applySort(filtered);  // אם יש לך Strategy, נשאר
+        currentView = applySort(filtered);
         render(currentView);
     }
 
