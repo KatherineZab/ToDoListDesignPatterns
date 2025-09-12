@@ -120,7 +120,7 @@ public final class TasksDAODerby implements ITasksDAO {
     }
 
     public void addTaskWithId(int id, ITask t) throws TasksDAOException {
-        final String sql = "INSERT INTO tasks (id,title,description,state,priority) VALUES (?,?,?,?,?)";
+        String sql = "INSERT INTO tasks (id,title,description,state,priority) VALUES (?,?,?,?,?)";
         try (Connection c = dao.Derby.instance().getConnection();
              PreparedStatement ps = c.prepareStatement(sql)) {
             ps.setInt(1, id);
@@ -131,6 +131,20 @@ public final class TasksDAODerby implements ITasksDAO {
             ps.executeUpdate();
         } catch (SQLException e) {
             throw new TasksDAOException("addTaskWithId failed (id=" + id + ")", e);
+        }
+    }
+
+    private int getCurrentIdentityValue(Connection c) throws SQLException {
+        try (Statement stmt = c.createStatement();
+             ResultSet rs = stmt.executeQuery("VALUES IDENTITY_VAL_LOCAL()")) {
+            return rs.next() ? rs.getInt(1) : 1;
+        }
+    }
+
+    private int getMaxId(Connection c) throws SQLException {
+        try (Statement stmt = c.createStatement();
+             ResultSet rs = stmt.executeQuery("SELECT COALESCE(MAX(id), 0) FROM tasks")) {
+            return rs.next() ? rs.getInt(1) : 0;
         }
     }
 

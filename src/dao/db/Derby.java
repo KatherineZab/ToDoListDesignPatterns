@@ -34,6 +34,7 @@ public final class Derby {
                   title VARCHAR(255) NOT NULL,
                   description CLOB,
                   state VARCHAR(40) NOT NULL,
+                  priority VARCHAR(10) DEFAULT 'NONE' NOT NULL,
                   PRIMARY KEY (id)
                 )
                 """;

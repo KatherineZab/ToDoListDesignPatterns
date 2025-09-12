@@ -51,6 +51,13 @@ public class TasksViewModel {
         load();
     }
 
+    public int addWithPriorityReturningId(String title, String desc, TaskState state, Priority priority) throws TasksDAOException {
+        var tr = new TaskRecord(0, title, desc, state, priority);
+        int id = ((dao.TasksDAODerby) dao).addTaskReturningId(tr);
+        load();
+        return id;
+    }
+
     /* ---------- Update/Delete ---------- */
 
     public void update(int id, String title, String desc, TaskState state) throws TasksDAOException {

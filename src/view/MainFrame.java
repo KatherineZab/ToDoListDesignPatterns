@@ -10,7 +10,7 @@ public class MainFrame extends JFrame {
     private final TasksPanel tasksPanel = new TasksPanel();
     private final FiltersPanel filtersPanel = new FiltersPanel();
 
-    private TasksViewModel vm; // ← חדש
+    private TasksViewModel vm;
 
     public MainFrame() {
         super("Tasks – UI Skeleton");
@@ -21,7 +21,6 @@ public class MainFrame extends JFrame {
         add(tasksPanel, BorderLayout.CENTER);
         add(buildCrudBar(), BorderLayout.SOUTH);
 
-        // מסנן עדיין עובד על הפאנל (הפאנל כבר ידע למשוך מה-VM)
         filtersPanel.setApplyAction(e ->
                 tasksPanel.applyFilter(filtersPanel.getQuery(), filtersPanel.getState())
         );
@@ -30,7 +29,6 @@ public class MainFrame extends JFrame {
         setLocationRelativeTo(null);
     }
 
-    // ← חדש: מוזרק מ-Main, ומועבר לפאנל
     public void setViewModel(TasksViewModel vm) {
         this.vm = vm;
         this.tasksPanel.setViewModel(vm);
@@ -45,13 +43,18 @@ public class MainFrame extends JFrame {
         JButton undo = new JButton("Undo");
         JButton redo = new JButton("Redo");
         JButton prio = new JButton("Priority");
-        JButton sortPrio  = new JButton("Sort: Priority");
-        JButton sortClear = new JButton("Sort: Clear");
-        p.add(sortPrio);p.add(sortClear);
+
+        JLabel sortLbl = new JLabel("Sort:");
+        JComboBox<String> sortBox = new JComboBox<>(new String[]{
+                "None",
+                "Priority (High→Low)"
+        });
+
+        p.add(sortLbl);
+        p.add(sortBox);
         p.add(add); p.add(edit); p.add(del);
         p.add(undo); p.add(redo); p.add(prio);
 
-        // Add -> משתמש ב-AddTaskCommand (ללא שינוי חתימות!)
         add.addActionListener(e -> {
             JTextField t = new JTextField();
             JTextField d = new JTextField();
@@ -60,16 +63,15 @@ public class MainFrame extends JFrame {
             int ok = JOptionPane.showConfirmDialog(this, form, "Add Task", JOptionPane.OK_CANCEL_OPTION);
             if (ok == JOptionPane.OK_OPTION) {
                 var command = new model.command.AddTaskCommand(
-                        tasksPanel,                   // ← נשאר
+                        tasksPanel,
                         t.getText().trim(),
                         d.getText().trim(),
-                        (String) s.getSelectedItem() // enum name: "TO_DO"...
+                        (String) s.getSelectedItem()
                 );
                 cmd.execute(command);
             }
         });
 
-        // Edit -> משתמש ב-UpdateTaskCommand
         edit.addActionListener(e -> {
             int id = tasksPanel.selectedIdOrMinus1();
             if (id < 0) return;
@@ -91,7 +93,6 @@ public class MainFrame extends JFrame {
             }
         });
 
-        // Delete -> משתמש ב-DeleteTaskCommand
         del.addActionListener(e -> {
             int id = tasksPanel.selectedIdOrMinus1();
             if (id >= 0) {
@@ -101,12 +102,17 @@ public class MainFrame extends JFrame {
         });
 
         prio.addActionListener(e -> tasksPanel.setPriorityForSelected());
-
-        // Undo/Redo
         undo.addActionListener(e -> cmd.undo());
         redo.addActionListener(e -> cmd.redo());
-        sortPrio.addActionListener(e -> tasksPanel.sortByPriorityHighToLow());
-        sortClear.addActionListener(e -> tasksPanel.clearSort());
+
+        sortBox.addActionListener(e -> {
+            String choice = (String) sortBox.getSelectedItem();
+            if ("Priority (High→Low)".equals(choice)) {
+                tasksPanel.sortByPriorityHighToLow();
+            } else {
+                tasksPanel.clearSort();
+            }
+        });
 
         return p;
     }
