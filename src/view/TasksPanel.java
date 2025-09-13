@@ -7,6 +7,8 @@ import model.entity.Priority;
 import model.observable.TasksListener;
 import model.decorator.PriorityDecorator;
 import model.sort.ByState;
+import model.sort.ByPriority;
+
 import viewModel.TasksViewModel;
 
 import javax.swing.*;
@@ -147,37 +149,6 @@ public class TasksPanel extends JPanel {
         }
     }
 
-    public void sortByPriorityHighToLow() {
-        if (vm != null) {
-            vm.setSortStrategy(new model.sort.ByPriority());
-        }
-    }
-
-    public void clearSort() {
-        if (vm != null) {
-            vm.setSortStrategy(null);
-        }
-    }
-
-    public void setPriorityForSelected() {
-        int id = selectedIdOrMinus1();
-        if (id < 0 || vm == null) return;
-
-        String[] opts = {"NONE","LOW","MEDIUM","HIGH"};
-        String chosen = (String) JOptionPane.showInputDialog(
-                this, "Select priority:", "Priority",
-                JOptionPane.PLAIN_MESSAGE, null, opts, "NONE"
-        );
-        if (chosen == null) return;
-
-        try {
-            vm.setPriority(id, Priority.valueOf(chosen));
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Failed to update priority",
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
 
     /* ---------------- Selection Helpers (Pure UI) ---------------- */
 
