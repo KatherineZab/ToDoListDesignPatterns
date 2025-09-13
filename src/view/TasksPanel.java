@@ -162,36 +162,6 @@ public class TasksPanel extends JPanel {
         return (val instanceof Integer) ? (Integer) val : Integer.parseInt(val.toString());
     }
 
-    public String currentTitle() {
-        JTable tbl = selectedTable();
-        int viewRow = tbl.getSelectedRow();
-        if (viewRow < 0) return "";
-        int modelRow = tbl.convertRowIndexToModel(viewRow);
-        return Objects.toString(modelOf(tbl).getValueAt(modelRow, 1), "");
-    }
-
-    public String currentDesc() {
-        JTable tbl = selectedTable();
-        int viewRow = tbl.getSelectedRow();
-        if (viewRow < 0) return "";
-        int modelRow = tbl.convertRowIndexToModel(viewRow);
-        return Objects.toString(modelOf(tbl).getValueAt(modelRow, 2), "");
-    }
-
-    public String currentState() {
-        JTable tbl = selectedTable();
-        int viewRow = tbl.getSelectedRow();
-        if (viewRow < 0) return "TO_DO";
-        int modelRow = tbl.convertRowIndexToModel(viewRow);
-
-        Object val = modelOf(tbl).getValueAt(modelRow, 4);
-        if (val instanceof TaskState st) {
-            return st.name(); // enum -> name
-        }
-        String s = Objects.toString(val, "TO_DO");
-        try { return TaskState.valueOf(s).name(); } catch (Exception ignore) { return "TO_DO"; }
-    }
-
     private JTable selectedTable() {
         if (tableActive.getSelectedRow() >= 0) return tableActive;
         if (tableCompleted.getSelectedRow() >= 0) return tableCompleted;

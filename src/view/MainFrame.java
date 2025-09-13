@@ -56,6 +56,7 @@ public class MainFrame extends JFrame {
         JButton sortState = new JButton("Sort: State");
         JButton sortClear = new JButton("Sort: Clear");
         JButton reportBtn = new JButton("Report");
+        JButton clearAll  = new JButton("Clear All");
 
         p.add(reportBtn);
         p.add(sortPrio);
@@ -67,6 +68,7 @@ public class MainFrame extends JFrame {
         p.add(undo);
         p.add(redo);
         p.add(prio);
+        p.add(clearAll);
 
         // ADD — View -> Command -> ViewModel
         add.addActionListener(e -> {
@@ -88,6 +90,20 @@ public class MainFrame extends JFrame {
                 cmd.execute(command);
             }
         });
+
+        clearAll.addActionListener(e -> {
+            if (!ensureVmOrWarn()) return;
+            int ok = JOptionPane.showConfirmDialog(
+                    this,
+                    "Delete ALL tasks? (You can undo afterwards)",
+                    "Confirm Clear All",
+                    JOptionPane.YES_NO_OPTION
+            );
+            if (ok == JOptionPane.YES_OPTION) {
+                cmd.execute(new model.command.DeleteAllTasksCommand(vm));
+            }
+        });
+
 
         // EDIT — View -> Command -> ViewModel
         edit.addActionListener(e -> {

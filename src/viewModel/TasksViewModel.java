@@ -135,22 +135,32 @@ public class TasksViewModel {
 
     /* ---------------- Update / Delete ---------------- */
 
+    // TasksViewModel.java
     public void update(int id, String title, String desc, TaskState newState) throws TasksDAOException {
-        var current = dao.getTask(id);
-        if (current == null) return;
+        var cur = dao.getTask(id);
+        if (cur == null) return;
 
-        TaskState oldState = current.getState();
-        var pr = (current instanceof TaskRecord r) ? r.priority() : Priority.NONE;
+        // נחלץ Priority גם אם current אינו TaskRecord
+        var pr = (cur instanceof TaskRecord tr) ? tr.priority() : Priority.NONE;
 
-        if (oldState != newState && current instanceof TaskRecord r) {
-            if (!r.state().canTransitionTo(newState)) {
-                throw new IllegalStateException(oldState + " → " + newState + " not allowed");
-            }
+        // נבנה צילום "לפני" כ-TaskRecord (אחיד לעבוד איתו)
+        TaskRecord before = (cur instanceof TaskRecord tr)
+                ? tr
+                : new TaskRecord(cur.getId(), cur.getTitle(), cur.getDescription(), cur.getState(), pr);
+
+        // נעדכן כותרת/תיאור (ללא שינוי state בשלב זה)
+        TaskRecord after = new TaskRecord(before.id(), title, desc, before.state(), pr);
+
+        // חשוב: לא לשבור את ההתנהגות הקיימת – אם ה-state לא השתנה, אל תאכפי מעבר.
+        // אם הוא כן השתנה, נשתמש ב-withState שמבצע את בדיקת המעבר (canTransitionTo) בפנים.
+        if (newState != before.state()) {
+            after = after.withState(newState);  // עשוי לזרוק IllegalStateException אם מעבר אסור
         }
 
-        dao.updateTask(new TaskRecord(id, title, desc, newState, pr));
-        load();
+        dao.updateTask(after);
+        load(); // רענון ופרסום למאזינים (Observer)
     }
+
 
     public void delete(int id) throws TasksDAOException {
         dao.deleteTask(id);
@@ -169,6 +179,12 @@ public class TasksViewModel {
             throw new RuntimeException("History apply failed", e);
         }
     }
+    // Delete ALL tasks
+    public void deleteAll() throws dao.TasksDAOException {
+        dao.deleteTasks();
+        load();   // ירענן את ה-UI ויקפיץ Observer
+    }
+
 
     /* ---------------- Priority ---------------- */
 
