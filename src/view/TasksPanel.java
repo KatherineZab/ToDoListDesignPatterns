@@ -7,8 +7,7 @@ import model.entity.Priority;
 import model.observable.TasksListener;
 import model.combinator.Filters;
 import model.combinator.TaskFilter;
-import model.sort.ByPriority;
-import model.sort.TaskSortStrategy;
+import model.sort.ByPriority;                 // we only *select* a strategy; VM applies it
 import model.decorator.PriorityDecorator;
 
 import viewModel.TasksViewModel;
@@ -40,11 +39,10 @@ public class TasksPanel extends JPanel {
     private final JTabbedPane tabs = new JTabbedPane();
 
     private TasksViewModel vm;
-    private TaskSortStrategy sortStrategy = null;
     private List<ITask> currentView = java.util.Collections.emptyList();
 
     // Subscribe via a dedicated TasksListener (observer lives outside the view)
-    private final TasksListener uiListener = snapshot -> refreshFromSnapshot(snapshot);
+    private final TasksListener uiListener = this::refreshFromSnapshot;
 
     public TasksPanel() {
         setLayout(new BorderLayout());
@@ -79,23 +77,12 @@ public class TasksPanel extends JPanel {
         this.vm = vm;
         if (this.vm != null) {
             this.vm.addTasksListener(uiListener);
-            // initial paint from VM cache
+            // initial paint from VM (already sorted by the VM's strategy)
             refreshFromVM();
         } else {
             // clear UI if no VM
             renderSplit(Collections.emptyList());
         }
-    }
-
-    // Keep listeners aligned if the component is attached/detached
-    @Override public void addNotify() {
-        super.addNotify();
-        if (vm != null) vm.addTasksListener(uiListener);
-    }
-
-    @Override public void removeNotify() {
-        if (vm != null) vm.removeTasksListener(uiListener);
-        super.removeNotify();
     }
 
     /* ---------------- Refresh paths ---------------- */
@@ -106,13 +93,9 @@ public class TasksPanel extends JPanel {
     }
 
     private void refreshFromSnapshot(List<ITask> snapshot) {
-        currentView = applySort(snapshot);
+        // VM provides a *sorted* snapshot; view renders as-is
+        currentView = snapshot;
         renderSplit(currentView);
-    }
-
-    private List<ITask> applySort(List<ITask> list) {
-        if (sortStrategy == null) return list;
-        return list.stream().sorted(sortStrategy.comparator()).toList();
     }
 
     /* ---------------- Rendering into two tables ---------------- */
@@ -135,25 +118,25 @@ public class TasksPanel extends JPanel {
         }
     }
 
-    /* ---------------- Filtering (UI-only) ---------------- */
+    /* ---------------- Filtering (UI-only; Combinator) ---------------- */
 
     public void applyFilter(String query, String stateNameOrAll) {
         if (vm == null) return;
 
-        var all = vm.items();
-        TaskFilter textFilter = Filters.textContains(query);
+        var all = vm.items(); // already sorted by VM; filtering is a view concern
+        TaskFilter textFilter  = Filters.textContains(query);
         TaskFilter stateFilter = Filters.stateIs(stateNameOrAll);
-        TaskFilter combinedFilter = textFilter.and(stateFilter);
+        TaskFilter combined    = textFilter.and(stateFilter);
 
         var filtered = all.stream()
-                .filter(task -> combinedFilter.test(
+                .filter(task -> combined.test(
                         task.getTitle(),
                         task.getDescription(),
                         task.getState().name()
                 ))
                 .collect(Collectors.toList());
 
-        currentView = applySort(filtered);
+        currentView = filtered;
         renderSplit(currentView);
     }
 
@@ -203,16 +186,18 @@ public class TasksPanel extends JPanel {
         return (t == tableActive) ? modelActive : modelCompleted;
     }
 
-    /* ---------------- Strategy (sorting) ---------------- */
+    /* ---------------- Strategy (sorting) — delegate to VM ---------------- */
 
     public void sortByPriorityHighToLow() {
-        sortStrategy = new ByPriority();
-        if (currentView != null) renderSplit(applySort(currentView));
+        if (vm == null) return;
+        vm.setSortStrategy(new ByPriority());
+        // VM will notify and refresh us via uiListener
     }
 
     public void clearSort() {
-        sortStrategy = null;
-        if (currentView != null) renderSplit(currentView);
+        if (vm == null) return;
+        vm.setSortStrategy(null);
+        // VM will notify and refresh us via uiListener
     }
 
     /* ---------------- Optional: Priority editor (UI trigger) ---------------- */
@@ -237,7 +222,7 @@ public class TasksPanel extends JPanel {
         }
     }
 
-    /* ---------------- Renderer for Title column ---------------- */
+    /* ---------------- Renderer for Title column (Decorator) ---------------- */
 
     private static final class TitleCellRenderer extends DefaultTableCellRenderer {
         private static final Font BASE_FONT = new JLabel().getFont();

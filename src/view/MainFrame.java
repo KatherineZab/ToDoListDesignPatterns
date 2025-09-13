@@ -2,6 +2,7 @@ package view;
 
 import viewModel.TasksViewModel;
 import model.TaskState;
+import model.TaskRecord;
 
 import javax.swing.*;
 import java.awt.BorderLayout;
@@ -23,7 +24,6 @@ public class MainFrame extends JFrame {
         add(tasksPanel, BorderLayout.CENTER);
         add(buildCrudBar(), BorderLayout.SOUTH);
 
-        // Filter action - this is acceptable as it's a UI coordination
         filtersPanel.setApplyAction(e ->
                 tasksPanel.applyFilter(filtersPanel.getQuery(), filtersPanel.getState())
         );
@@ -56,7 +56,6 @@ public class MainFrame extends JFrame {
         JButton sortClear = new JButton("Sort: Clear");
         JButton reportBtn = new JButton("Report");
 
-        // סדר הכפתורים בפאנל
         p.add(reportBtn);
         p.add(sortPrio);
         p.add(sortClear);
@@ -67,25 +66,19 @@ public class MainFrame extends JFrame {
         p.add(redo);
         p.add(prio);
 
-        // ADD - Proper MVVM: View -> Command -> ViewModel
+        // ADD — View -> Command -> ViewModel
         add.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
 
             JTextField titleField = new JTextField(20);
-            JTextField descField = new JTextField(20);
-            JComboBox<String> stateCombo = new JComboBox<>(new String[]{"TO_DO", "IN_PROGRESS", "COMPLETED"});
+            JTextField descField  = new JTextField(20);
+            JComboBox<String> stateCombo = new JComboBox<>(new String[]{"TO_DO","IN_PROGRESS","COMPLETED"});
 
-            Object[] form = {
-                    "Title:", titleField,
-                    "Description:", descField,
-                    "State:", stateCombo
-            };
-
-            int result = JOptionPane.showConfirmDialog(this, form, "Add Task", JOptionPane.OK_CANCEL_OPTION);
-            if (result == JOptionPane.OK_OPTION) {
-                // CORRECT MVVM: Direct Command -> ViewModel communication
+            Object[] form = {"Title:", titleField, "Description:", descField, "State:", stateCombo};
+            int ok = JOptionPane.showConfirmDialog(this, form, "Add Task", JOptionPane.OK_CANCEL_OPTION);
+            if (ok == JOptionPane.OK_OPTION) {
                 var command = new model.command.AddTaskCommand(
-                        vm,  // Goes directly to ViewModel
+                        vm,
                         titleField.getText().trim(),
                         descField.getText().trim(),
                         (String) stateCombo.getSelectedItem()
@@ -94,30 +87,39 @@ public class MainFrame extends JFrame {
             }
         });
 
-        // EDIT - Proper MVVM: Get selection through ViewModel
+        // EDIT — View -> Command -> ViewModel
         edit.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
 
-            // CORRECT MVVM: Ask ViewModel for selected task data
-            var selectedTask = getSelectedTaskFromViewModel();
-            if (selectedTask == null) {
+            int selectedId = tasksPanel.selectedIdOrMinus1();
+            if (selectedId < 0) {
                 JOptionPane.showMessageDialog(this, "Please select a task to edit", "No Selection", JOptionPane.WARNING_MESSAGE);
                 return;
             }
 
+            TaskRecord selectedTask;
+            try {
+                var task = vm.getById(selectedId);
+                selectedTask = (task instanceof TaskRecord tr) ? tr : null;
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Could not load task: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            if (selectedTask == null) {
+                JOptionPane.showMessageDialog(this, "Task not found", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+
             JTextField titleField = new JTextField(selectedTask.title(), 20);
-            JTextField descField = new JTextField(selectedTask.description(), 20);
+            JTextField descField  = new JTextField(selectedTask.description(), 20);
 
-            // Get allowed states from ViewModel (proper State pattern usage)
             java.util.LinkedHashSet<String> allowedStates = new java.util.LinkedHashSet<>();
-            allowedStates.add(selectedTask.state().name()); // Current state always allowed
-
+            allowedStates.add(selectedTask.state().name());
             try {
                 for (var state : vm.allowedNextStatesOf(selectedTask.id())) {
                     allowedStates.add(state.name());
                 }
             } catch (Exception ex) {
-                // Fallback to all states if error
                 for (TaskState state : TaskState.values()) {
                     allowedStates.add(state.name());
                 }
@@ -126,17 +128,11 @@ public class MainFrame extends JFrame {
             JComboBox<String> stateCombo = new JComboBox<>(allowedStates.toArray(new String[0]));
             stateCombo.setSelectedItem(selectedTask.state().name());
 
-            Object[] form = {
-                    "Title:", titleField,
-                    "Description:", descField,
-                    "State:", stateCombo
-            };
-
-            int result = JOptionPane.showConfirmDialog(this, form, "Edit Task", JOptionPane.OK_CANCEL_OPTION);
-            if (result == JOptionPane.OK_OPTION) {
-                // CORRECT MVVM: Command -> ViewModel
+            Object[] form = {"Title:", titleField, "Description:", descField, "State:", stateCombo};
+            int ok = JOptionPane.showConfirmDialog(this, form, "Edit Task", JOptionPane.OK_CANCEL_OPTION);
+            if (ok == JOptionPane.OK_OPTION) {
                 var command = new model.command.UpdateTaskCommand(
-                        vm,  // Goes directly to ViewModel
+                        vm,
                         selectedTask.id(),
                         titleField.getText().trim(),
                         descField.getText().trim(),
@@ -146,13 +142,26 @@ public class MainFrame extends JFrame {
             }
         });
 
-        // DELETE - Proper MVVM: Get selection through ViewModel
+        // DELETE — View -> Command -> ViewModel
         del.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
 
-            var selectedTask = getSelectedTaskFromViewModel();
-            if (selectedTask == null) {
+            int selectedId = tasksPanel.selectedIdOrMinus1();
+            if (selectedId < 0) {
                 JOptionPane.showMessageDialog(this, "Please select a task to delete", "No Selection", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            TaskRecord selectedTask;
+            try {
+                var task = vm.getById(selectedId);
+                selectedTask = (task instanceof TaskRecord tr) ? tr : null;
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Could not load task: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                return;
+            }
+            if (selectedTask == null) {
+                JOptionPane.showMessageDialog(this, "Task not found", "Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
 
@@ -162,62 +171,34 @@ public class MainFrame extends JFrame {
                     "Confirm Delete",
                     JOptionPane.YES_NO_OPTION
             );
-
             if (confirm == JOptionPane.YES_OPTION) {
-                // CORRECT MVVM: Command -> ViewModel
-                var command = new model.command.DeleteTaskCommand(vm, selectedTask.id());
+                var command = new model.command.DeleteTaskCommand(vm, selectedId);
                 cmd.execute(command);
             }
         });
 
-        // Priority editing - this could also be moved to ViewModel for better MVVM
+        // Priority (UI convenience)
         prio.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
-
-            var selectedTask = getSelectedTaskFromViewModel();
-            if (selectedTask == null) {
-                JOptionPane.showMessageDialog(this, "Please select a task", "No Selection", JOptionPane.WARNING_MESSAGE);
-                return;
-            }
-
-            String[] priorities = {"NONE", "LOW", "MEDIUM", "HIGH"};
-            String currentPriority = (selectedTask instanceof model.TaskRecord tr) ?
-                    tr.priority().name() : "NONE";
-
-            String chosen = (String) JOptionPane.showInputDialog(
-                    this, "Select priority:", "Set Priority",
-                    JOptionPane.PLAIN_MESSAGE, null, priorities, currentPriority
-            );
-
-            if (chosen != null) {
-                try {
-                    vm.setPriority(selectedTask.id(), model.entity.Priority.valueOf(chosen));
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(this, "Failed to update priority: " + ex.getMessage(),
-                            "Error", JOptionPane.ERROR_MESSAGE);
-                }
-            }
+            tasksPanel.setPriorityForSelected();
         });
 
-        // Command pattern operations
+        // Undo/Redo
         undo.addActionListener(e -> cmd.undo());
         redo.addActionListener(e -> cmd.redo());
 
-        // Strategy pattern for sorting
+        // Sort buttons now delegate to VM (via TasksPanel tiny patch below)
         sortPrio.addActionListener(e -> tasksPanel.sortByPriorityHighToLow());
         sortClear.addActionListener(e -> tasksPanel.clearSort());
 
-        // Visitor pattern for reports
+        // Reports (Visitor inside VM)
         reportBtn.addActionListener(e -> {
-            if (vm == null) {
-                JOptionPane.showMessageDialog(this, "ViewModel not set", "Error", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
-            try {
-                // דו"ח מסוכם — ה-VM מריץ Visitor בפנים
-                String text = vm.buildCombinedReport();
+            if (!ensureVmOrWarn()) return;
 
-                JTextArea area = new JTextArea(text, 18, 50);
+            try {
+                String reportText = vm.generateCombinedReport();
+
+                JTextArea area = new JTextArea(reportText, 18, 50);
                 area.setEditable(false);
                 JScrollPane scroll = new JScrollPane(area);
 
@@ -229,33 +210,34 @@ public class MainFrame extends JFrame {
                 );
 
                 if (choice == 0) {
-                    // ייצוא CSV — ה-VM מריץ Visitor בפנים
-                    String csv = vm.exportCSV();
+                    String csvContent = vm.exportCSV();
 
-                    javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
-                    fc.setSelectedFile(new java.io.File("tasks_report.csv"));
-                    if (fc.showSaveDialog(this) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                    JFileChooser fileChooser = new JFileChooser();
+                    fileChooser.setSelectedFile(new java.io.File("tasks_report.csv"));
+
+                    if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
                         try {
                             java.nio.file.Files.writeString(
-                                    fc.getSelectedFile().toPath(),
-                                    csv,
+                                    fileChooser.getSelectedFile().toPath(),
+                                    csvContent,
                                     java.nio.charset.StandardCharsets.UTF_8
                             );
                             JOptionPane.showMessageDialog(this,
-                                    "CSV saved to:\n" + fc.getSelectedFile().getAbsolutePath(),
-                                    "Export CSV", JOptionPane.INFORMATION_MESSAGE);
+                                    "CSV exported successfully to:\n" + fileChooser.getSelectedFile().getAbsolutePath(),
+                                    "Export Complete", JOptionPane.INFORMATION_MESSAGE);
                         } catch (Exception ex) {
                             JOptionPane.showMessageDialog(this,
                                     "Failed to save CSV: " + ex.getMessage(),
-                                    "Error", JOptionPane.ERROR_MESSAGE);
+                                    "Export Error", JOptionPane.ERROR_MESSAGE);
                         }
                     }
                 }
-            } catch (dao.TasksDAOException ex) {
-                JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this,
+                        "Report generation failed: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
-        // === END REPORT ===
 
         return p;
     }
