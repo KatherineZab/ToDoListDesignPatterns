@@ -2,27 +2,26 @@ package viewModel;
 
 import dao.ITasksDAO;
 import dao.TasksDAOException;
+import dao.TasksDAODerby;
 import model.ITask;
 import model.TaskRecord;
 import model.TaskState;
 import model.entity.Priority;
 import model.observable.TasksListener;
 import model.observable.TasksRepository;
-import model.sort.TaskSortStrategy;        // <-- Strategy lives in VM now
+import model.sort.TaskSortStrategy;
+import model.combinator.TaskFilter;
+import model.combinator.Filters;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 public class TasksViewModel {
 
     private final ITasksDAO dao;
-
-    /** Raw cache, exactly as stored in the DB (no view concerns here). */
     private final List<ITask> cache = new ArrayList<>();
-
-    /** Strategy: current sorting policy selected by the user (may be null). */
+    private List<ITask> filteredCache = null; // Stores filtered results
     private TaskSortStrategy sortStrategy = null;
-
-    /** Observer hub (separate files, EDT-safe). */
     private final TasksRepository observers = new TasksRepository();
 
     public TasksViewModel(ITasksDAO dao) {
@@ -35,59 +34,103 @@ public class TasksViewModel {
     public void addTasksListener(TasksListener l) { observers.addListener(l); }
     public void removeTasksListener(TasksListener l) { observers.removeListener(l); }
 
-    /** Notifies with a **sorted** immutable snapshot. */
     private void fireChanged() { observers.notifyListeners(items()); }
 
-    /* ---------------- Sorting (Strategy) ---------------- */
+    /* ---------------- Filtering (Combinator Pattern in ViewModel) ---------------- */
 
-    /** Set/clear the current sorting strategy. */
+    public void applyFilter(String query, String stateNameOrAll) {
+        // Business logic filtering in ViewModel using Combinator pattern
+        TaskFilter textFilter = Filters.textContains(query);
+        TaskFilter stateFilter = Filters.stateIs(stateNameOrAll);
+        TaskFilter combinedFilter = textFilter.and(stateFilter);
+
+        // Apply filter to cache
+        var filtered = cache.stream()
+                .filter(task -> combinedFilter.test(
+                        task.getTitle(),
+                        task.getDescription(),
+                        task.getState().name()
+                ))
+                .collect(Collectors.toList());
+
+        // Store filtered results
+        this.filteredCache = filtered;
+        fireChanged(); // Notify views with filtered, sorted data
+    }
+
+    public void clearFilter() {
+        this.filteredCache = null;
+        fireChanged(); // Show all data again
+    }
+
+    /* ---------------- Sorting (Strategy Pattern) ---------------- */
+
     public void setSortStrategy(TaskSortStrategy strategy) {
         this.sortStrategy = strategy;
-        fireChanged(); // let views re-render in the new order
+        fireChanged(); // Notify views to re-render in new order
     }
 
     private List<ITask> applySort(List<ITask> src) {
-        if (sortStrategy == null) return List.copyOf(src);
-        return src.stream().sorted(sortStrategy.comparator()).toList();
+        if (sortStrategy == null) return new ArrayList<>(src);
+        return src.stream().sorted(sortStrategy.comparator()).collect(Collectors.toList());
     }
 
     /* ---------------- Queries ---------------- */
 
-    /** Immutable, **sorted** view of the current tasks according to the strategy. */
-    public List<ITask> items() { return Collections.unmodifiableList(applySort(cache)); }
+    public List<ITask> items() {
+        // Return filtered view if filter is active, otherwise full cache
+        List<ITask> source = (filteredCache != null) ? filteredCache : cache;
+        return Collections.unmodifiableList(applySort(source));
+    }
 
-    public ITask getById(int id) throws TasksDAOException { return dao.getTask(id); }
+    public ITask getById(int id) throws TasksDAOException {
+        return dao.getTask(id);
+    }
 
     public void load() throws TasksDAOException {
         cache.clear();
         Collections.addAll(cache, dao.getTasks());
-        fireChanged(); // sorted snapshot goes to observers
+        // Clear filter when reloading data
+        filteredCache = null;
+        fireChanged();
     }
 
     /* ---------------- Create ---------------- */
 
     public int addReturningId(String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, Priority.NONE);
-        Set<Integer> before = currentIds();
-        dao.addTask(tr);
-        load();
-        return findNewIdAfterAdd(before, title, desc);
+        if (dao instanceof TasksDAODerby derbyDao) {
+            int id = derbyDao.addTaskReturningId(tr);
+            load();
+            return id;
+        } else {
+            dao.addTask(tr);
+            load();
+            return -1;
+        }
     }
 
-    /** Best-effort add with id (DB may ignore id and assign a new one). */
     public void addWithId(int id, String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(id, title, desc, state, Priority.NONE);
-        dao.addTask(tr);
-        load();
+        if (dao instanceof TasksDAODerby derbyDao) {
+            derbyDao.addTaskWithId(id, tr);
+            load();
+        } else {
+            throw new UnsupportedOperationException("addTaskWithId is not supported by this DAO");
+        }
     }
 
-    public int addWithPriorityReturningId(String title, String desc,
-                                          TaskState state, Priority priority) throws TasksDAOException {
+    public int addWithPriorityReturningId(String title, String desc, TaskState state, Priority priority) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, priority);
-        Set<Integer> before = currentIds();
-        dao.addTask(tr);
-        load();
-        return findNewIdAfterAdd(before, title, desc);
+        if (dao instanceof TasksDAODerby derbyDao) {
+            int id = derbyDao.addTaskReturningId(tr);
+            load();
+            return id;
+        } else {
+            dao.addTask(tr);
+            load();
+            return -1;
+        }
     }
 
     /* ---------------- Update / Delete ---------------- */
@@ -99,7 +142,6 @@ public class TasksViewModel {
         TaskState oldState = current.getState();
         var pr = (current instanceof TaskRecord r) ? r.priority() : Priority.NONE;
 
-        // Enforce transition rules only when the state actually changes
         if (oldState != newState && current instanceof TaskRecord r) {
             if (!r.state().canTransitionTo(newState)) {
                 throw new IllegalStateException(oldState + " → " + newState + " not allowed");
@@ -107,7 +149,7 @@ public class TasksViewModel {
         }
 
         dao.updateTask(new TaskRecord(id, title, desc, newState, pr));
-        load(); // refresh & notify observers with sorted snapshot
+        load();
     }
 
     public void delete(int id) throws TasksDAOException {
@@ -120,11 +162,9 @@ public class TasksViewModel {
     public void setPriority(int id, Priority p) throws TasksDAOException {
         var current = dao.getTask(id);
         if (current == null) return;
-
         var tr = (current instanceof TaskRecord old)
                 ? new TaskRecord(old.id(), old.title(), old.description(), old.state(), p)
                 : new TaskRecord(current.getId(), current.getTitle(), current.getDescription(), current.getState(), p);
-
         dao.updateTask(tr);
         load();
     }
@@ -135,51 +175,43 @@ public class TasksViewModel {
         return Arrays.asList(TaskState.values());
     }
 
-    /* ---------------- Reports (Visitor kept in VM) ---------------- */
+    /* ---------------- Reports (Visitor Pattern) ---------------- */
 
-    /** Alias kept for MainFrame — returns the same as buildCombinedReport(). */
-    public String generateCombinedReport() throws TasksDAOException { return buildCombinedReport(); }
-
-    /** Human-friendly combined report using Visitor + pattern matching. */
-    public String buildCombinedReport() throws TasksDAOException {
+    public String generateCombinedReport() throws TasksDAOException {
         var visitor = new model.report.CombinedReportVisitor();
-        for (var t : items()) { // use the **sorted** view
-            if (t instanceof TaskRecord tr) visitor.visit(tr);
-            else visitor.visit(new TaskRecord(
-                    t.getId(), t.getTitle(), t.getDescription(), t.getState(), Priority.NONE));
+        for (ITask t : items()) { // Uses current filtered/sorted view
+            if (t instanceof TaskRecord tr) {
+                visitor.visit(tr);
+            } else {
+                var tr = new TaskRecord(
+                        t.getId(),
+                        t.getTitle(),
+                        t.getDescription(),
+                        t.getState(),
+                        Priority.NONE
+                );
+                visitor.visit(tr);
+            }
         }
         return visitor.asText();
     }
 
-    /** CSV export via Visitor + pattern matching (respects current sort). */
     public String exportCSV() throws TasksDAOException {
         var visitor = new model.report.CSVExportVisitor();
-        for (var t : items()) { // use the **sorted** view
-            if (t instanceof TaskRecord tr) visitor.visit(tr);
-            else visitor.visit(new TaskRecord(
-                    t.getId(), t.getTitle(), t.getDescription(), t.getState(), Priority.NONE));
-        }
-        return visitor.csv();
-    }
-
-    /* ---------------- Helpers ---------------- */
-
-    private Set<Integer> currentIds() {
-        Set<Integer> s = new HashSet<>();
-        for (var t : cache) s.add(t.getId());
-        return s;
-    }
-
-    private int findNewIdAfterAdd(Set<Integer> before, String title, String desc) {
-        for (var t : cache) {
-            if (!before.contains(t.getId())
-                    && Objects.equals(t.getTitle(), title)
-                    && Objects.equals(t.getDescription(), desc)) {
-                return t.getId();
+        for (ITask t : items()) { // Uses current filtered/sorted view
+            if (t instanceof TaskRecord tr) {
+                visitor.visit(tr);
+            } else {
+                var tr = new TaskRecord(
+                        t.getId(),
+                        t.getTitle(),
+                        t.getDescription(),
+                        t.getState(),
+                        Priority.NONE
+                );
+                visitor.visit(tr);
             }
         }
-        int max = -1;
-        for (var t : cache) max = Math.max(max, t.getId());
-        return max;
+        return visitor.csv();
     }
 }

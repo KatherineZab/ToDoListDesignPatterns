@@ -23,4 +23,5 @@ public record TaskRecord(
             throw new IllegalStateException(state + " → " + next + " not allowed");
         return new TaskRecord(id, title, description, next, priority);
     }
+
 }

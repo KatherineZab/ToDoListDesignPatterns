@@ -5,11 +5,7 @@ import model.TaskRecord;
 import model.TaskState;
 import model.entity.Priority;
 import model.observable.TasksListener;
-import model.combinator.Filters;
-import model.combinator.TaskFilter;
-import model.sort.ByPriority;                 // we only *select* a strategy; VM applies it
 import model.decorator.PriorityDecorator;
-
 import viewModel.TasksViewModel;
 
 import javax.swing.*;
@@ -20,11 +16,9 @@ import java.awt.font.TextAttribute;
 import java.util.*;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 public class TasksPanel extends JPanel {
 
-    // ----- models & tables -----
     private final DefaultTableModel modelActive = new DefaultTableModel(
             new Object[]{"ID","Title","Description","Priority","State"}, 0
     ) { @Override public boolean isCellEditable(int r, int c) { return false; } };
@@ -33,15 +27,13 @@ public class TasksPanel extends JPanel {
             new Object[]{"ID","Title","Description","Priority","State"}, 0
     ) { @Override public boolean isCellEditable(int r, int c) { return false; } };
 
-    private final JTable tableActive    = new JTable(modelActive);
+    private final JTable tableActive = new JTable(modelActive);
     private final JTable tableCompleted = new JTable(modelCompleted);
-
     private final JTabbedPane tabs = new JTabbedPane();
 
     private TasksViewModel vm;
-    private List<ITask> currentView = java.util.Collections.emptyList();
 
-    // Subscribe via a dedicated TasksListener (observer lives outside the view)
+    // Observer pattern: Listen to ViewModel changes
     private final TasksListener uiListener = this::refreshFromSnapshot;
 
     public TasksPanel() {
@@ -55,10 +47,9 @@ public class TasksPanel extends JPanel {
 
         tabs.addTab("Active (ToDo + InProgress)", activeRoot);
         tabs.addTab("Completed", completedRoot);
-
         add(tabs, BorderLayout.CENTER);
 
-        // Title renderer for both tables
+        // Decorator pattern: Custom renderer for title column
         TitleCellRenderer titleRenderer = new TitleCellRenderer();
         tableActive.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
         tableCompleted.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
@@ -67,25 +58,34 @@ public class TasksPanel extends JPanel {
         tableCompleted.setRowHeight(22);
     }
 
-    /* ---------------- MVVM wiring ---------------- */
+    /* ---------------- MVVM Wiring ---------------- */
 
     public void setViewModel(TasksViewModel vm) {
-        // unsubscribe from previous VM
         if (this.vm != null) {
             this.vm.removeTasksListener(uiListener);
         }
         this.vm = vm;
         if (this.vm != null) {
             this.vm.addTasksListener(uiListener);
-            // initial paint from VM (already sorted by the VM's strategy)
             refreshFromVM();
         } else {
-            // clear UI if no VM
             renderSplit(Collections.emptyList());
         }
     }
 
-    /* ---------------- Refresh paths ---------------- */
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        if (vm != null) vm.addTasksListener(uiListener);
+    }
+
+    @Override
+    public void removeNotify() {
+        if (vm != null) vm.removeTasksListener(uiListener);
+        super.removeNotify();
+    }
+
+    /* ---------------- UI Updates (Observer Pattern) ---------------- */
 
     private void refreshFromVM() {
         if (vm == null) return;
@@ -93,12 +93,9 @@ public class TasksPanel extends JPanel {
     }
 
     private void refreshFromSnapshot(List<ITask> snapshot) {
-        // VM provides a *sorted* snapshot; view renders as-is
-        currentView = snapshot;
-        renderSplit(currentView);
+        // Pure UI: Just render what ViewModel provides (already filtered/sorted)
+        renderSplit(snapshot);
     }
-
-    /* ---------------- Rendering into two tables ---------------- */
 
     private void renderSplit(List<ITask> list) {
         modelActive.setRowCount(0);
@@ -113,34 +110,62 @@ public class TasksPanel extends JPanel {
                     p.name(),
                     t.getState().name()
             };
-            if (t.getState() == TaskState.COMPLETED) modelCompleted.addRow(row);
-            else modelActive.addRow(row);
+            if (t.getState() == TaskState.COMPLETED) {
+                modelCompleted.addRow(row);
+            } else {
+                modelActive.addRow(row);
+            }
         }
     }
 
-    /* ---------------- Filtering (UI-only; Combinator) ---------------- */
+    /* ---------------- Pure UI: Trigger ViewModel Operations ---------------- */
 
     public void applyFilter(String query, String stateNameOrAll) {
-        if (vm == null) return;
-
-        var all = vm.items(); // already sorted by VM; filtering is a view concern
-        TaskFilter textFilter  = Filters.textContains(query);
-        TaskFilter stateFilter = Filters.stateIs(stateNameOrAll);
-        TaskFilter combined    = textFilter.and(stateFilter);
-
-        var filtered = all.stream()
-                .filter(task -> combined.test(
-                        task.getTitle(),
-                        task.getDescription(),
-                        task.getState().name()
-                ))
-                .collect(Collectors.toList());
-
-        currentView = filtered;
-        renderSplit(currentView);
+        if (vm != null) {
+            vm.applyFilter(query, stateNameOrAll); // Delegate to ViewModel
+            // ViewModel will notify us via Observer pattern
+        }
     }
 
-    /* ---------------- Selection helpers (View-only) ---------------- */
+    public void clearFilter() {
+        if (vm != null) {
+            vm.clearFilter();
+        }
+    }
+
+    public void sortByPriorityHighToLow() {
+        if (vm != null) {
+            vm.setSortStrategy(new model.sort.ByPriority());
+        }
+    }
+
+    public void clearSort() {
+        if (vm != null) {
+            vm.setSortStrategy(null);
+        }
+    }
+
+    public void setPriorityForSelected() {
+        int id = selectedIdOrMinus1();
+        if (id < 0 || vm == null) return;
+
+        String[] opts = {"NONE","LOW","MEDIUM","HIGH"};
+        String chosen = (String) JOptionPane.showInputDialog(
+                this, "Select priority:", "Priority",
+                JOptionPane.PLAIN_MESSAGE, null, opts, "NONE"
+        );
+        if (chosen == null) return;
+
+        try {
+            vm.setPriority(id, Priority.valueOf(chosen));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Failed to update priority",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /* ---------------- Selection Helpers (Pure UI) ---------------- */
 
     public int selectedIdOrMinus1() {
         JTable tbl = selectedTable();
@@ -186,43 +211,7 @@ public class TasksPanel extends JPanel {
         return (t == tableActive) ? modelActive : modelCompleted;
     }
 
-    /* ---------------- Strategy (sorting) — delegate to VM ---------------- */
-
-    public void sortByPriorityHighToLow() {
-        if (vm == null) return;
-        vm.setSortStrategy(new ByPriority());
-        // VM will notify and refresh us via uiListener
-    }
-
-    public void clearSort() {
-        if (vm == null) return;
-        vm.setSortStrategy(null);
-        // VM will notify and refresh us via uiListener
-    }
-
-    /* ---------------- Optional: Priority editor (UI trigger) ---------------- */
-
-    public void setPriorityForSelected() {
-        int id = selectedIdOrMinus1();
-        if (id < 0 || vm == null) return;
-
-        String[] opts = {"NONE","LOW","MEDIUM","HIGH"};
-        String chosen = (String) JOptionPane.showInputDialog(
-                this, "Select priority:", "Priority",
-                JOptionPane.PLAIN_MESSAGE, null, opts, "NONE"
-        );
-        if (chosen == null) return;
-
-        try {
-            vm.setPriority(id, Priority.valueOf(chosen));
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            JOptionPane.showMessageDialog(this, "Failed to update priority",
-                    "Error", JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    /* ---------------- Renderer for Title column (Decorator) ---------------- */
+    /* ---------------- Decorator Pattern: Title Cell Renderer ---------------- */
 
     private static final class TitleCellRenderer extends DefaultTableCellRenderer {
         private static final Font BASE_FONT = new JLabel().getFont();
@@ -237,10 +226,11 @@ public class TasksPanel extends JPanel {
             DefaultTableModel m = (DefaultTableModel) table.getModel();
 
             String title = Objects.toString(m.getValueAt(modelRow, 1), "");
-            String desc  = Objects.toString(m.getValueAt(modelRow, 2), "");
-            Priority pr  = safePriority(Objects.toString(m.getValueAt(modelRow, 3), "NONE"));
+            String desc = Objects.toString(m.getValueAt(modelRow, 2), "");
+            Priority pr = safePriority(Objects.toString(m.getValueAt(modelRow, 3), "NONE"));
             TaskState st = safeState(Objects.toString(m.getValueAt(modelRow, 4), "TO_DO"));
 
+            // Decorator pattern: Enhance title with priority indicators
             ITask rowTask = new TaskRecord(-1, title, desc, st, pr);
             String decoratedTitle = new PriorityDecorator(rowTask, pr).getTitle();
 
@@ -263,15 +253,17 @@ public class TasksPanel extends JPanel {
 
         private static Color colorFor(Priority p) {
             return switch (p) {
-                case HIGH   -> new Color(0xC0, 0x00, 0x00);
+                case HIGH -> new Color(0xC0, 0x00, 0x00);
                 case MEDIUM -> new Color(0xB3, 0x6B, 0x00);
-                case LOW    -> new Color(0x66, 0x66, 0x66);
-                default     -> Color.BLACK;
+                case LOW -> new Color(0x66, 0x66, 0x66);
+                default -> Color.BLACK;
             };
         }
+
         private static Priority safePriority(String n) {
             try { return Priority.valueOf(n); } catch (Exception e) { return Priority.NONE; }
         }
+
         private static TaskState safeState(String n) {
             try { return TaskState.valueOf(n); } catch (Exception e) { return TaskState.TO_DO; }
         }
