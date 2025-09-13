@@ -137,58 +137,46 @@ public class MainFrame extends JFrame {
                 JOptionPane.showMessageDialog(this, "ViewModel not set", "Error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
+            try {
+                // דו"ח מסוכם — ה-VM מריץ Visitor בפנים
+                String text = vm.buildCombinedReport();
 
-            // מבקר סיכומים (מימוש ב-package report)
-            var summaryVisitor = new model.report.CombinedReportVisitor();
+                JTextArea area = new JTextArea(text, 18, 50);
+                area.setEditable(false);
+                JScrollPane scroll = new JScrollPane(area);
 
-            // Record + Pattern Matching (לפי דרישת המרצה)
-            for (var t : vm.items()) {
-                if (t instanceof model.TaskRecord tr) {
-                    summaryVisitor.visit(tr);
-                }
-            }
+                Object[] options = {"Export CSV...", "Close"};
+                int choice = JOptionPane.showOptionDialog(
+                        this, scroll, "Tasks Report",
+                        JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE,
+                        null, options, options[1]
+                );
 
-            String text = summaryVisitor.asText();
+                if (choice == 0) {
+                    // ייצוא CSV — ה-VM מריץ Visitor בפנים
+                    String csv = vm.exportCSV();
 
-            // תצוגה יפה + אופציית ייצוא ל-CSV
-            JTextArea area = new JTextArea(text, 18, 50);
-            area.setEditable(false);
-            JScrollPane scroll = new JScrollPane(area);
-
-            Object[] options = {"Export CSV...", "Close"};
-            int choice = JOptionPane.showOptionDialog(
-                    this, scroll, "Tasks Report",
-                    JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE,
-                    null, options, options[1]
-            );
-
-            if (choice == 0) {
-                var csvVisitor = new model.report.CSVExportVisitor();
-                for (var t : vm.items()) {
-                    if (t instanceof model.TaskRecord tr) {
-                        csvVisitor.visit(tr);
+                    javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+                    fc.setSelectedFile(new java.io.File("tasks_report.csv"));
+                    if (fc.showSaveDialog(this) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                        try {
+                            java.nio.file.Files.writeString(
+                                    fc.getSelectedFile().toPath(),
+                                    csv,
+                                    java.nio.charset.StandardCharsets.UTF_8
+                            );
+                            JOptionPane.showMessageDialog(this,
+                                    "CSV saved to:\n" + fc.getSelectedFile().getAbsolutePath(),
+                                    "Export CSV", JOptionPane.INFORMATION_MESSAGE);
+                        } catch (Exception ex) {
+                            JOptionPane.showMessageDialog(this,
+                                    "Failed to save CSV: " + ex.getMessage(),
+                                    "Error", JOptionPane.ERROR_MESSAGE);
+                        }
                     }
                 }
-                String csv = csvVisitor.csv();
-
-                javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
-                fc.setSelectedFile(new java.io.File("tasks_report.csv"));
-                if (fc.showSaveDialog(this) == javax.swing.JFileChooser.APPROVE_OPTION) {
-                    try {
-                        java.nio.file.Files.writeString(
-                                fc.getSelectedFile().toPath(),
-                                csv,
-                                java.nio.charset.StandardCharsets.UTF_8
-                        );
-                        JOptionPane.showMessageDialog(this,
-                                "CSV saved to:\n" + fc.getSelectedFile().getAbsolutePath(),
-                                "Export CSV", JOptionPane.INFORMATION_MESSAGE);
-                    } catch (Exception ex) {
-                        JOptionPane.showMessageDialog(this,
-                                "Failed to save CSV: " + ex.getMessage(),
-                                "Error", JOptionPane.ERROR_MESSAGE);
-                    }
-                }
+            } catch (dao.TasksDAOException ex) {
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
         // === END REPORT ===

@@ -6,7 +6,7 @@ import model.ITask;
 import model.TaskRecord;
 import model.TaskState;
 import model.entity.Priority;
-
+import dao.ITasksDAOWithIds;
 import java.util.*;
 import java.util.function.Consumer;
 
@@ -39,23 +39,42 @@ public class TasksViewModel {
 
     public int addReturningId(String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, Priority.NONE);
-        // מתודת הרחבה קיימת אצלך ב-DAO:
-        int id = ((dao.TasksDAODerby) dao).addTaskReturningId(tr);
-        load();
-        return id;
+        if (dao instanceof ITasksDAOWithIds idDao) { // NEW: interface pattern matching
+            int id = idDao.addTaskReturningId(tr);
+            load();
+            return id;
+        } else {
+            // Fallback: keep data consistent; caller will see there's no ID path
+            dao.addTask(tr);
+            load();
+            // You can return -1 or throw; your UI already catches exceptions and uses -1.
+            return -1;
+        }
     }
 
     public void addWithId(int id, String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(id, title, desc, state, Priority.NONE);
-        ((dao.TasksDAODerby) dao).addTaskWithId(id, tr);
-        load();
+        if (dao instanceof ITasksDAOWithIds idDao) { // NEW
+            idDao.addTaskWithId(id, tr);
+            load();
+        } else {
+            // If the underlying DAO doesn't support this, fail loudly or silently – your choice.
+            throw new UnsupportedOperationException("addTaskWithId is not supported by this DAO");
+        }
     }
 
     public int addWithPriorityReturningId(String title, String desc, TaskState state, Priority priority) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, priority);
-        int id = ((dao.TasksDAODerby) dao).addTaskReturningId(tr);
-        load();
-        return id;
+        if (dao instanceof ITasksDAOWithIds idDao) { // NEW
+            int id = idDao.addTaskReturningId(tr);
+            load();
+            return id;
+        } else {
+            // Fallback: insert without returning id
+            dao.addTask(tr);
+            load();
+            return -1;
+        }
     }
 
     /* ---------- Update/Delete ---------- */
@@ -103,5 +122,53 @@ public class TasksViewModel {
         // fallback אם אי פעם זה לא TaskRecord:
         return java.util.Arrays.asList(model.TaskState.values());
     }
+
+    /* ---------- Reports & Export (Visitor) ---------- */
+
+    /**
+     * Builds a human-readable combined report using the Visitor + pattern matching.
+     */
+    public String buildCombinedReport() throws TasksDAOException {
+        var visitor = new model.report.CombinedReportVisitor();
+        for (model.ITask t : dao.getTasks()) {
+            if (t instanceof model.TaskRecord tr) {
+                visitor.visit(tr); // record pattern matching יופעל בתוך ה-visitor
+            } else {
+                // fallback: אם אי פעם יגיע ITask שאינו record, נעטוף ל-TaskRecord עם priority NONE
+                var tr = new model.TaskRecord(
+                        t.getId(),
+                        t.getTitle(),
+                        t.getDescription(),
+                        t.getState(),
+                        model.entity.Priority.NONE
+                );
+                visitor.visit(tr);
+            }
+        }
+        return visitor.asText();
+    }
+
+    /**
+     * Exports all tasks to CSV string using the Visitor + record pattern matching.
+     */
+    public String exportCSV() throws TasksDAOException {
+        var visitor = new model.report.CSVExportVisitor();
+        for (model.ITask t : dao.getTasks()) {
+            if (t instanceof model.TaskRecord tr) {
+                visitor.visit(tr);
+            } else {
+                var tr = new model.TaskRecord(
+                        t.getId(),
+                        t.getTitle(),
+                        t.getDescription(),
+                        t.getState(),
+                        model.entity.Priority.NONE
+                );
+                visitor.visit(tr);
+            }
+        }
+        return visitor.csv();
+    }
+
 
 }
