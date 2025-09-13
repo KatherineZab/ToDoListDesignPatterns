@@ -54,15 +54,15 @@ public final class UpdateTaskCommand implements Command {
         }
     }
 
+
     @Override
     public void undo() {
         if (before == null) return;
         try {
-            vm.update(before.id(), before.title(), before.description(), before.state());
-            // Restore priority if needed
-            vm.setPriority(before.id(), before.priority());
-        } catch (Exception e) {
+            vm.applyFromHistory(before);   // ← שחזור מלא ללא ולידציה (כולל ה-priority שב-snapshot)
+        } catch (RuntimeException e) {
             throw new RuntimeException("Undo update failed", e);
         }
     }
+
 }

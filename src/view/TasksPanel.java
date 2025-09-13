@@ -9,7 +9,7 @@ import model.combinator.Filters;
 import model.combinator.TaskFilter;
 import model.sort.ByPriority;                 // we only *select* a strategy; VM applies it
 import model.decorator.PriorityDecorator;
-
+import model.sort.ByState;
 import viewModel.TasksViewModel;
 
 import javax.swing.*;
@@ -63,8 +63,14 @@ public class TasksPanel extends JPanel {
         tableActive.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
         tableCompleted.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
 
+// NEW: State renderer for both tables (shows badge())
+        StateCellRenderer stateRenderer = new StateCellRenderer();
+        tableActive.getColumnModel().getColumn(4).setCellRenderer(stateRenderer);
+        tableCompleted.getColumnModel().getColumn(4).setCellRenderer(stateRenderer);
+
         tableActive.setRowHeight(22);
         tableCompleted.setRowHeight(22);
+
     }
 
     /* ---------------- MVVM wiring ---------------- */
@@ -110,8 +116,8 @@ public class TasksPanel extends JPanel {
                     t.getId(),
                     t.getTitle(),
                     t.getDescription(),
-                    p.name(),
-                    t.getState().name()
+                    p,
+                    t.getState()
             };
             if (t.getState() == TaskState.COMPLETED) modelCompleted.addRow(row);
             else modelActive.addRow(row);
@@ -173,8 +179,15 @@ public class TasksPanel extends JPanel {
         int viewRow = tbl.getSelectedRow();
         if (viewRow < 0) return "TO_DO";
         int modelRow = tbl.convertRowIndexToModel(viewRow);
-        return Objects.toString(modelOf(tbl).getValueAt(modelRow, 4), "TO_DO");
+
+        Object val = modelOf(tbl).getValueAt(modelRow, 4);
+        if (val instanceof TaskState st) {
+            return st.name(); // enum -> name
+        }
+        String s = Objects.toString(val, "TO_DO");
+        try { return TaskState.valueOf(s).name(); } catch (Exception ignore) { return "TO_DO"; }
     }
+
 
     private JTable selectedTable() {
         if (tableActive.getSelectedRow() >= 0) return tableActive;
@@ -192,6 +205,11 @@ public class TasksPanel extends JPanel {
         if (vm == null) return;
         vm.setSortStrategy(new ByPriority());
         // VM will notify and refresh us via uiListener
+    }
+
+    public void sortByStateToDoFirst() {
+        if (vm == null) return;
+        vm.setSortStrategy(new ByState()); // default order in ByState is TO_DO → IN_PROGRESS
     }
 
     public void clearSort() {
@@ -276,4 +294,27 @@ public class TasksPanel extends JPanel {
             try { return TaskState.valueOf(n); } catch (Exception e) { return TaskState.TO_DO; }
         }
     }
+    private static final class StateCellRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+            TaskState st;
+            if (value instanceof TaskState ts) {
+                st = ts;
+            } else {
+                try {
+                    st = TaskState.valueOf(Objects.toString(value, "TO_DO"));
+                } catch (Exception e) {
+                    st = TaskState.TO_DO;
+                }
+            }
+
+            lbl.setText(st.badge()); // shows friendly text
+            return lbl;
+        }
+    }
 }
+
+

@@ -53,11 +53,13 @@ public class MainFrame extends JFrame {
         JButton redo      = new JButton("Redo");
         JButton prio      = new JButton("Priority");
         JButton sortPrio  = new JButton("Sort: Priority");
+        JButton sortState = new JButton("Sort: State");
         JButton sortClear = new JButton("Sort: Clear");
         JButton reportBtn = new JButton("Report");
 
         p.add(reportBtn);
         p.add(sortPrio);
+        p.add(sortState);
         p.add(sortClear);
         p.add(add);
         p.add(edit);
@@ -189,6 +191,7 @@ public class MainFrame extends JFrame {
 
         // Sort buttons now delegate to VM (via TasksPanel tiny patch below)
         sortPrio.addActionListener(e -> tasksPanel.sortByPriorityHighToLow());
+        sortState.addActionListener(e -> tasksPanel.sortByStateToDoFirst()); // [ADDED]
         sortClear.addActionListener(e -> tasksPanel.clearSort());
 
         // Reports (Visitor inside VM)
