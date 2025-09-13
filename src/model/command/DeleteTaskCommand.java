@@ -1,36 +1,50 @@
 package model.command;
 
-import view.TasksPanel;
+import model.ITask;
+import model.TaskRecord;
+import model.entity.Priority;
+import viewModel.TasksViewModel;
 
-public class DeleteTaskCommand implements Command {
-    private final TasksPanel panel;
-    private int currentId;
+/** Command: Delete a task via the ViewModel (supports undo/redo correctly). */
+public final class DeleteTaskCommand implements Command {
+    private final TasksViewModel vm;
+    private int id;                 // <-- must be mutable for redo to work
+    private TaskRecord snapshot;    // for undo
 
-    private Object[] deletedRow; // {id,title,desc,priority,state}
-
-    public DeleteTaskCommand(TasksPanel panel, int id) {
-        this.panel = panel;
-        this.currentId = id;
+    public DeleteTaskCommand(TasksViewModel vm, int id) {
+        this.vm = vm;
+        this.id = id;
     }
 
     @Override
     public void execute() {
-        deletedRow = panel.snapshotById(currentId);
-        if (deletedRow != null) {
-            panel.removeRowById(currentId);
+        try {
+            // capture current snapshot (from VM cache if possible)
+            ITask t = vm.items().stream().filter(x -> x.getId() == id).findFirst().orElse(null);
+            if (t == null) return;
+
+            if (t instanceof TaskRecord tr) {
+                snapshot = tr;
+            } else {
+                snapshot = new TaskRecord(t.getId(), t.getTitle(), t.getDescription(),
+                        t.getState(), Priority.NONE);
+            }
+            vm.delete(id);
+        } catch (Exception e) {
+            throw new RuntimeException("Delete failed", e);
         }
     }
 
     @Override
     public void undo() {
-        if (deletedRow != null) {
-            String t  = (String) deletedRow[1];  // title
-            String d  = (String) deletedRow[2];  // description
-            String p  = (String) deletedRow[3];  // priority
-            String st = (String) deletedRow[4];  // state
-
-            // Restore with priority
-            currentId = panel.addRowWithPriorityReturningId(t, d, st, p);
+        if (snapshot == null) return;
+        try {
+            // re-add and capture the NEW id, so redo() deletes the right row
+            int newId = vm.addReturningId(snapshot.title(), snapshot.description(), snapshot.state());
+            vm.setPriority(newId, snapshot.priority());
+            this.id = newId;   // <-- critical line for redo
+        } catch (Exception e) {
+            throw new RuntimeException("Undo delete failed", e);
         }
     }
 }

@@ -4,28 +4,28 @@ import model.ITask;
 import model.TaskRecord;
 import model.TaskState;
 import model.entity.Priority;
-import viewmodel.TasksViewModel;
+import model.observable.TasksListener;
+import model.combinator.Filters;
+import model.combinator.TaskFilter;
+import model.sort.ByPriority;
+import model.sort.TaskSortStrategy;
+import model.decorator.PriorityDecorator;
+
+import viewModel.TasksViewModel;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
 import java.awt.font.TextAttribute;
-import java.util.HashMap;
+import java.util.*;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
-import model.combinator.Filters;
-import model.combinator.TaskFilter;
-import model.sort.ByPriority;
-import model.sort.TaskSortStrategy;
-import model.decorator.PriorityDecorator; // <-- הוספתי: שימוש בדקורטור רק להצגה
-
 public class TasksPanel extends JPanel {
 
-    // ----- שני מודלים ושתי טבלאות -----
+    // ----- models & tables -----
     private final DefaultTableModel modelActive = new DefaultTableModel(
             new Object[]{"ID","Title","Description","Priority","State"}, 0
     ) { @Override public boolean isCellEditable(int r, int c) { return false; } };
@@ -41,7 +41,10 @@ public class TasksPanel extends JPanel {
 
     private TasksViewModel vm;
     private TaskSortStrategy sortStrategy = null;
-    private List<ITask> currentView = java.util.Collections.emptyList(); // נשמור את הרשימה המסוננת-מסודרת האחרונה
+    private List<ITask> currentView = java.util.Collections.emptyList();
+
+    // Subscribe via a dedicated TasksListener (observer lives outside the view)
+    private final TasksListener uiListener = snapshot -> refreshFromSnapshot(snapshot);
 
     public TasksPanel() {
         setLayout(new BorderLayout());
@@ -57,26 +60,54 @@ public class TasksPanel extends JPanel {
 
         add(tabs, BorderLayout.CENTER);
 
-        // ---- הוספה מינימלית: renderer לעמודת Title (עמודה 1) בשתי הטבלאות ----
+        // Title renderer for both tables
         TitleCellRenderer titleRenderer = new TitleCellRenderer();
         tableActive.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
         tableCompleted.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
-        // אופציונלי למניעת "קפיצות" גובה
+
         tableActive.setRowHeight(22);
         tableCompleted.setRowHeight(22);
     }
 
-    // ---------- חיבור VM ----------
+    /* ---------------- MVVM wiring ---------------- */
+
     public void setViewModel(TasksViewModel vm) {
+        // unsubscribe from previous VM
+        if (this.vm != null) {
+            this.vm.removeTasksListener(uiListener);
+        }
         this.vm = vm;
-        vm.addListener(tasks -> SwingUtilities.invokeLater(this::refreshFromVM));
-        refreshFromVM();
+        if (this.vm != null) {
+            this.vm.addTasksListener(uiListener);
+            // initial paint from VM cache
+            refreshFromVM();
+        } else {
+            // clear UI if no VM
+            renderSplit(Collections.emptyList());
+        }
     }
+
+    // Keep listeners aligned if the component is attached/detached
+    @Override public void addNotify() {
+        super.addNotify();
+        if (vm != null) vm.addTasksListener(uiListener);
+    }
+
+    @Override public void removeNotify() {
+        if (vm != null) vm.removeTasksListener(uiListener);
+        super.removeNotify();
+    }
+
+    /* ---------------- Refresh paths ---------------- */
 
     private void refreshFromVM() {
         if (vm == null) return;
-        currentView = applySort(vm.items());
-        renderSplit(currentView); // מילוי שתי הטבלאות
+        refreshFromSnapshot(vm.items());
+    }
+
+    private void refreshFromSnapshot(List<ITask> snapshot) {
+        currentView = applySort(snapshot);
+        renderSplit(currentView);
     }
 
     private List<ITask> applySort(List<ITask> list) {
@@ -84,14 +115,14 @@ public class TasksPanel extends JPanel {
         return list.stream().sorted(sortStrategy.comparator()).toList();
     }
 
-    // ---------- רינדור לשתי טבלאות ----------
+    /* ---------------- Rendering into two tables ---------------- */
+
     private void renderSplit(List<ITask> list) {
         modelActive.setRowCount(0);
         modelCompleted.setRowCount(0);
 
         for (ITask t : list) {
             Priority p = (t instanceof TaskRecord tr) ? tr.priority() : Priority.NONE;
-
             Object[] row = new Object[]{
                     t.getId(),
                     t.getTitle(),
@@ -99,15 +130,13 @@ public class TasksPanel extends JPanel {
                     p.name(),
                     t.getState().name()
             };
-            if (t.getState() == TaskState.COMPLETED) {
-                modelCompleted.addRow(row);
-            } else {
-                modelActive.addRow(row);
-            }
+            if (t.getState() == TaskState.COMPLETED) modelCompleted.addRow(row);
+            else modelActive.addRow(row);
         }
     }
 
-    // ---------- פילטר קיים (נשאר אותו API), עכשיו מפצל לשתי טבלאות ----------
+    /* ---------------- Filtering (UI-only) ---------------- */
+
     public void applyFilter(String query, String stateNameOrAll) {
         if (vm == null) return;
 
@@ -128,81 +157,7 @@ public class TasksPanel extends JPanel {
         renderSplit(currentView);
     }
 
-    // ===== API used by commands (נשאר זהה חתימתית) =====
-
-    public int addRowReturningId(String title, String desc, String stateName) {
-        try {
-            return vm.addReturningId(title, desc, TaskState.valueOf(stateName));
-        } catch (Exception e) {
-            e.printStackTrace();
-            return -1;
-        }
-    }
-
-    public void addRowWithId(int id, String title, String desc, String stateName) {
-        try { vm.addWithId(id, title, desc, TaskState.valueOf(stateName)); }
-        catch (Exception e) { e.printStackTrace(); }
-    }
-
-    public void removeRowById(int id) {
-        try { vm.delete(id); } catch (Exception e) { e.printStackTrace(); }
-    }
-
-    public void setRowValuesById(int id, String newTitle, String newDesc, String newStateName) {
-        try { vm.update(id, newTitle, newDesc, TaskState.valueOf(newStateName)); }
-        catch (Exception e) { e.printStackTrace(); }
-    }
-
-    public Object[] snapshotById(int id) {
-        int idx = modelIndexById(modelActive, id);
-        DefaultTableModel m = modelActive;
-        if (idx < 0) {
-            idx = modelIndexById(modelCompleted, id);
-            m = modelCompleted;
-        }
-        if (idx < 0) return null;
-        return new Object[]{
-                m.getValueAt(idx, 0), // id
-                m.getValueAt(idx, 1), // title (RAW)
-                m.getValueAt(idx, 2), // description
-                m.getValueAt(idx, 3), // priority
-                m.getValueAt(idx, 4)  // state
-        };
-    }
-
-    public int addRowWithPriorityReturningId(String title, String desc, String stateName, String priorityName) {
-        try {
-            int id = vm.addWithPriorityReturningId(title, desc, TaskState.valueOf(stateName), Priority.valueOf(priorityName));
-            return id;
-        } catch (Exception e) {
-            e.printStackTrace();
-            return -1;
-        }
-    }
-
-    // חיפוש לפי ID במודל מסוים
-    private int modelIndexById(DefaultTableModel m, int id) {
-        for (int i = 0; i < m.getRowCount(); i++) {
-            Object val = m.getValueAt(i, 0);
-            int rowId = (val instanceof Integer) ? (Integer) val : Integer.parseInt(val.toString());
-            if (rowId == id) return i;
-        }
-        return -1;
-    }
-
-    // נשאיר חתימה ישנה (אם יש שימוש חיצוני), נחזיר אינדקס מה-Active ואם לא נמצא מה-Completed, אחרת -1
-    public int modelIndexById(int id) {
-        int idx = modelIndexById(modelActive, id);
-        if (idx >= 0) return idx;
-        return modelIndexById(modelCompleted, id);
-    }
-
-    public void addRowWithIdAt(int index, int id, String t, String d, String stName) {
-        // Keeping same signature for compatibility
-        addRowWithId(id, t, d, stName);
-    }
-
-    // ===== עזר ל-MainFrame (נשאר אותו API, כעת קורא מהטבלה המסומנת) =====
+    /* ---------------- Selection helpers (View-only) ---------------- */
 
     public int selectedIdOrMinus1() {
         JTable tbl = selectedTable();
@@ -241,7 +196,6 @@ public class TasksPanel extends JPanel {
     private JTable selectedTable() {
         if (tableActive.getSelectedRow() >= 0) return tableActive;
         if (tableCompleted.getSelectedRow() >= 0) return tableCompleted;
-        // אם אין בחירה, נשתמש בטאב הפעיל
         return (tabs.getSelectedIndex() == 1) ? tableCompleted : tableActive;
     }
 
@@ -249,7 +203,8 @@ public class TasksPanel extends JPanel {
         return (t == tableActive) ? modelActive : modelCompleted;
     }
 
-    // ===== Strategy (סידור) =====
+    /* ---------------- Strategy (sorting) ---------------- */
+
     public void sortByPriorityHighToLow() {
         sortStrategy = new ByPriority();
         if (currentView != null) renderSplit(applySort(currentView));
@@ -260,10 +215,11 @@ public class TasksPanel extends JPanel {
         if (currentView != null) renderSplit(currentView);
     }
 
-    // ===== Priority editor =====
+    /* ---------------- Optional: Priority editor (UI trigger) ---------------- */
+
     public void setPriorityForSelected() {
         int id = selectedIdOrMinus1();
-        if (id < 0) return;
+        if (id < 0 || vm == null) return;
 
         String[] opts = {"NONE","LOW","MEDIUM","HIGH"};
         String chosen = (String) JOptionPane.showInputDialog(
@@ -281,15 +237,8 @@ public class TasksPanel extends JPanel {
         }
     }
 
-    // =======================
-    //  Renderer לעמודת Title
-    // =======================
-    /**
-     * - משתמש ב-PriorityDecorator כדי להעשיר את הכותרת (prefix/סימון),
-     * - צובע לפי Priority,
-     * - מוסיף קו-חוצה אם Completed,
-     * תוך שמירה על מודל טקסט נקי (RAW).
-     */
+    /* ---------------- Renderer for Title column ---------------- */
+
     private static final class TitleCellRenderer extends DefaultTableCellRenderer {
         private static final Font BASE_FONT = new JLabel().getFont();
 
@@ -307,16 +256,13 @@ public class TasksPanel extends JPanel {
             Priority pr  = safePriority(Objects.toString(m.getValueAt(modelRow, 3), "NONE"));
             TaskState st = safeState(Objects.toString(m.getValueAt(modelRow, 4), "TO_DO"));
 
-            // בניית TaskRecord קצר כדי להשתמש בדקורטור (בלי לגעת במודל)
             ITask rowTask = new TaskRecord(-1, title, desc, st, pr);
             String decoratedTitle = new PriorityDecorator(rowTask, pr).getTitle();
 
-            // צבע לפי Priority (לא לדרוס בזמן בחירה)
             if (!isSelected) {
                 lbl.setForeground(colorFor(pr));
             }
 
-            // קו-חוצה אם Completed
             if (st == TaskState.COMPLETED) {
                 Map<TextAttribute, Object> attrs = new HashMap<>(BASE_FONT.getAttributes());
                 attrs.put(TextAttribute.STRIKETHROUGH, TextAttribute.STRIKETHROUGH_ON);
@@ -327,10 +273,8 @@ public class TasksPanel extends JPanel {
 
             lbl.setText(decoratedTitle);
             lbl.setToolTipText(title);
-
             return lbl;
         }
-
 
         private static Color colorFor(Priority p) {
             return switch (p) {
@@ -340,11 +284,9 @@ public class TasksPanel extends JPanel {
                 default     -> Color.BLACK;
             };
         }
-
         private static Priority safePriority(String n) {
             try { return Priority.valueOf(n); } catch (Exception e) { return Priority.NONE; }
         }
-
         private static TaskState safeState(String n) {
             try { return TaskState.valueOf(n); } catch (Exception e) { return TaskState.TO_DO; }
         }

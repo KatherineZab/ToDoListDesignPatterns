@@ -2,7 +2,7 @@ package app;
 
 import dao.TasksDAODerby;
 import view.MainFrame;
-import viewmodel.TasksViewModel;
+import viewModel.TasksViewModel;
 
 import javax.swing.SwingUtilities;
 

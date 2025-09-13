@@ -3,33 +3,27 @@ package model.command;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-public class CommandManager {
-
+public final class CommandManager {
     private final Deque<Command> undoStack = new ArrayDeque<>();
     private final Deque<Command> redoStack = new ArrayDeque<>();
 
-    public void execute(Command cmd) {
-        cmd.execute();
-        undoStack.push(cmd);
-        redoStack.clear();
+    public void execute(Command c) {
+        c.execute();
+        undoStack.push(c);
+        redoStack.clear();           // clear redo after a new action
     }
 
-    public boolean canUndo() { return !undoStack.isEmpty(); }
-    public boolean canRedo() { return !redoStack.isEmpty(); }
-
     public void undo() {
-        if (!undoStack.isEmpty()) {
-            Command cmd = undoStack.pop();
-            cmd.undo();
-            redoStack.push(cmd);
-        }
+        if (undoStack.isEmpty()) return;
+        Command c = undoStack.pop();
+        c.undo();
+        redoStack.push(c);
     }
 
     public void redo() {
-        if (!redoStack.isEmpty()) {
-            Command cmd = redoStack.pop();
-            cmd.execute();
-            undoStack.push(cmd);
-        }
+        if (redoStack.isEmpty()) return;
+        Command c = redoStack.pop();
+        c.execute();                 // redo = re-apply the command
+        undoStack.push(c);
     }
 }

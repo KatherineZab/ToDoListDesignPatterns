@@ -1,4 +1,4 @@
-package viewmodel;
+package viewModel;
 
 import dao.ITasksDAO;
 import dao.TasksDAOException;
@@ -6,102 +6,135 @@ import model.ITask;
 import model.TaskRecord;
 import model.TaskState;
 import model.entity.Priority;
+import model.observable.TasksListener;
+import model.observable.TasksRepository;
 
 import java.util.*;
-import java.util.function.Consumer;
 
 public class TasksViewModel {
 
     private final ITasksDAO dao;
     private final List<ITask> cache = new ArrayList<>();
-    private final List<Consumer<List<ITask>>> listeners = new ArrayList<>();
+
+    // Observer hub lives in its own class/file
+    private final TasksRepository observers = new TasksRepository();
 
     public TasksViewModel(ITasksDAO dao) {
-        this.dao = dao;
+        this.dao = Objects.requireNonNull(dao, "dao must not be null");
         try { load(); } catch (Exception ignored) {}
     }
 
-    public void addListener(Consumer<List<ITask>> l) { listeners.add(l); }
-    private void notifyListeners() {
-        var ro = Collections.unmodifiableList(cache);
-        for (var l : listeners) l.accept(ro);
-    }
+    /* ---------------- Observer API (for Views) ---------------- */
 
-    public List<ITask> items() { return cache; }
+    public void addTasksListener(TasksListener l) { observers.addListener(l); }
+    public void removeTasksListener(TasksListener l) { observers.removeListener(l); }
+
+    private void fireChanged() { observers.notifyListeners(cache); }
+
+    /* ---------------- Queries ---------------- */
+
+    /** Immutable view of current tasks cache. */
+    public List<ITask> items() { return Collections.unmodifiableList(cache); }
+
+    public ITask getById(int id) throws TasksDAOException {
+        return dao.getTask(id);
+    }
 
     public void load() throws TasksDAOException {
         cache.clear();
-        cache.addAll(Arrays.asList(dao.getTasks()));
-        notifyListeners();
+        Collections.addAll(cache, dao.getTasks());
+        fireChanged(); // notifies on EDT
     }
 
-    /* ---------- Add ---------- */
+    /* ---------------- Create ---------------- */
 
     public int addReturningId(String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, Priority.NONE);
-        // מתודת הרחבה קיימת אצלך ב-DAO:
-        int id = ((dao.TasksDAODerby) dao).addTaskReturningId(tr);
+        Set<Integer> before = currentIds();
+        dao.addTask(tr);
         load();
-        return id;
+        return findNewIdAfterAdd(before, title, desc);
     }
 
+    public int addWithPriorityReturningId(String title, String desc,
+                                          TaskState state, Priority priority) throws TasksDAOException {
+        var tr = new TaskRecord(0, title, desc, state, priority);
+        Set<Integer> before = currentIds();
+        dao.addTask(tr);
+        load();
+        return findNewIdAfterAdd(before, title, desc);
+    }
+
+    /** Official API cannot force an id; this adds content and DB assigns the id. */
     public void addWithId(int id, String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(id, title, desc, state, Priority.NONE);
-        ((dao.TasksDAODerby) dao).addTaskWithId(id, tr);
+        dao.addTask(tr);
         load();
     }
 
-    public int addWithPriorityReturningId(String title, String desc, TaskState state, Priority priority) throws TasksDAOException {
-        var tr = new TaskRecord(0, title, desc, state, priority);
-        int id = ((dao.TasksDAODerby) dao).addTaskReturningId(tr);
-        load();
-        return id;
-    }
-
-    /* ---------- Update/Delete ---------- */
+    /* ---------------- Update / Delete ---------------- */
 
     public void update(int id, String title, String desc, TaskState newState) throws TasksDAOException {
         var current = dao.getTask(id);
         if (current == null) return;
-        // שמירת priority קיים
-        var p = (current instanceof TaskRecord tr) ? tr.priority() : Priority.NONE;
 
-        // בדיקת חוקיות מעבר לפי ה-STATE enum
-        if (current instanceof TaskRecord tr) {
-            if (!tr.state().canTransitionTo(newState)) {
-                throw new IllegalStateException(tr.state() + " → " + newState + " not allowed");
+        TaskState oldState = current.getState();
+        var pr = (current instanceof TaskRecord r) ? r.priority() : Priority.NONE;
+
+        // Enforce transition rules only when state actually changes
+        if (oldState != newState && current instanceof TaskRecord r) {
+            if (!r.state().canTransitionTo(newState)) {
+                throw new IllegalStateException(oldState + " → " + newState + " not allowed");
             }
-            dao.updateTask(new TaskRecord(id, title, desc, newState, p));
-        } else {
-            // גיבוי: אם אי פעם יגיע סוג אחר
-            dao.updateTask(new TaskRecord(id, title, desc, newState, p));
         }
-        load();
+
+        dao.updateTask(new TaskRecord(id, title, desc, newState, pr));
+        load(); // refresh & notify (EDT)
     }
 
     public void delete(int id) throws TasksDAOException {
         dao.deleteTask(id);
         load();
     }
-    /* ---------- Priority API ל-View ---------- */
+
+    /* ---------------- Priority ---------------- */
 
     public void setPriority(int id, Priority p) throws TasksDAOException {
         var current = dao.getTask(id);
         if (current == null) return;
+
         var tr = (current instanceof TaskRecord old)
                 ? new TaskRecord(old.id(), old.title(), old.description(), old.state(), p)
                 : new TaskRecord(current.getId(), current.getTitle(), current.getDescription(), current.getState(), p);
+
         dao.updateTask(tr);
         load();
     }
 
-    public java.util.List<model.TaskState> allowedNextStatesOf(int taskId) throws dao.TasksDAOException {
+    public List<TaskState> allowedNextStatesOf(int taskId) throws TasksDAOException {
         var t = dao.getTask(taskId);
-        if (t instanceof model.TaskRecord tr) {
-            return new java.util.ArrayList<>(tr.allowedNextStates());
-        }
-        // fallback אם אי פעם זה לא TaskRecord:
-        return java.util.Arrays.asList(model.TaskState.values());
+        if (t instanceof TaskRecord tr) return new ArrayList<>(tr.allowedNextStates());
+        return Arrays.asList(TaskState.values());
     }
 
+    /* ---------------- Helpers ---------------- */
+
+    private Set<Integer> currentIds() {
+        Set<Integer> s = new HashSet<>();
+        for (var t : cache) s.add(t.getId());
+        return s;
+    }
+
+    private int findNewIdAfterAdd(Set<Integer> before, String title, String desc) {
+        for (var t : cache) {
+            if (!before.contains(t.getId())
+                    && Objects.equals(t.getTitle(), title)
+                    && Objects.equals(t.getDescription(), desc)) {
+                return t.getId();
+            }
+        }
+        int max = -1;
+        for (var t : cache) max = Math.max(max, t.getId());
+        return max;
+    }
 }
