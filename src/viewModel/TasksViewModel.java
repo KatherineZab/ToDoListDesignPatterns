@@ -156,6 +156,19 @@ public class TasksViewModel {
         dao.deleteTask(id);
         load();
     }
+    /**
+     * INTERNAL (Undo/Redo only): apply a previously saved snapshot WITHOUT transition validation.
+     * Do not call this from regular UI flows.
+     */
+    public void applyFromHistory(TaskRecord snapshot) {
+        Objects.requireNonNull(snapshot, "snapshot");
+        try {
+            dao.updateTask(snapshot);  // בלי בדיקות canTransitionTo
+            load();                    // מרענן ומודיע ל-View (או refreshView() אצלך)
+        } catch (TasksDAOException e) {
+            throw new RuntimeException("History apply failed", e);
+        }
+    }
 
     /* ---------------- Priority ---------------- */
 

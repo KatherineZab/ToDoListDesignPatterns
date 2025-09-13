@@ -6,6 +6,7 @@ import model.TaskState;
 import model.entity.Priority;
 import model.observable.TasksListener;
 import model.decorator.PriorityDecorator;
+import model.sort.ByState;
 import viewModel.TasksViewModel;
 
 import javax.swing.*;
@@ -32,6 +33,7 @@ public class TasksPanel extends JPanel {
     private final JTabbedPane tabs = new JTabbedPane();
 
     private TasksViewModel vm;
+    private List<ITask> currentView = java.util.Collections.emptyList();
 
     // Observer pattern: Listen to ViewModel changes
     private final TasksListener uiListener = this::refreshFromSnapshot;
@@ -47,6 +49,7 @@ public class TasksPanel extends JPanel {
 
         tabs.addTab("Active (ToDo + InProgress)", activeRoot);
         tabs.addTab("Completed", completedRoot);
+
         add(tabs, BorderLayout.CENTER);
 
         // Decorator pattern: Custom renderer for title column
@@ -54,21 +57,30 @@ public class TasksPanel extends JPanel {
         tableActive.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
         tableCompleted.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
 
+// NEW: State renderer for both tables (shows badge())
+        StateCellRenderer stateRenderer = new StateCellRenderer();
+        tableActive.getColumnModel().getColumn(4).setCellRenderer(stateRenderer);
+        tableCompleted.getColumnModel().getColumn(4).setCellRenderer(stateRenderer);
+
         tableActive.setRowHeight(22);
         tableCompleted.setRowHeight(22);
+
     }
 
     /* ---------------- MVVM Wiring ---------------- */
 
     public void setViewModel(TasksViewModel vm) {
+        // unsubscribe from previous VM
         if (this.vm != null) {
             this.vm.removeTasksListener(uiListener);
         }
         this.vm = vm;
         if (this.vm != null) {
             this.vm.addTasksListener(uiListener);
+            // initial paint from VM (already sorted by the VM's strategy)
             refreshFromVM();
         } else {
+            // clear UI if no VM
             renderSplit(Collections.emptyList());
         }
     }
@@ -97,6 +109,8 @@ public class TasksPanel extends JPanel {
         renderSplit(snapshot);
     }
 
+    /* ---------------- Rendering into two tables ---------------- */
+
     private void renderSplit(List<ITask> list) {
         modelActive.setRowCount(0);
         modelCompleted.setRowCount(0);
@@ -118,7 +132,7 @@ public class TasksPanel extends JPanel {
         }
     }
 
-    /* ---------------- Pure UI: Trigger ViewModel Operations ---------------- */
+    /* ---------------- Filtering (UI-only; Combinator) ---------------- */
 
     public void applyFilter(String query, String stateNameOrAll) {
         if (vm != null) {
@@ -198,7 +212,13 @@ public class TasksPanel extends JPanel {
         int viewRow = tbl.getSelectedRow();
         if (viewRow < 0) return "TO_DO";
         int modelRow = tbl.convertRowIndexToModel(viewRow);
-        return Objects.toString(modelOf(tbl).getValueAt(modelRow, 4), "TO_DO");
+
+        Object val = modelOf(tbl).getValueAt(modelRow, 4);
+        if (val instanceof TaskState st) {
+            return st.name(); // enum -> name
+        }
+        String s = Objects.toString(val, "TO_DO");
+        try { return TaskState.valueOf(s).name(); } catch (Exception ignore) { return "TO_DO"; }
     }
 
     private JTable selectedTable() {
@@ -211,7 +231,48 @@ public class TasksPanel extends JPanel {
         return (t == tableActive) ? modelActive : modelCompleted;
     }
 
-    /* ---------------- Decorator Pattern: Title Cell Renderer ---------------- */
+    /* ---------------- Strategy (sorting) — delegate to VM ---------------- */
+
+    public void sortByPriorityHighToLow() {
+        if (vm == null) return;
+        vm.setSortStrategy(new ByPriority());
+        // VM will notify and refresh us via uiListener
+    }
+
+    public void sortByStateToDoFirst() {
+        if (vm == null) return;
+        vm.setSortStrategy(new ByState()); // default order in ByState is TO_DO → IN_PROGRESS
+    }
+
+    public void clearSort() {
+        if (vm == null) return;
+        vm.setSortStrategy(null);
+        // VM will notify and refresh us via uiListener
+    }
+
+    /* ---------------- Optional: Priority editor (UI trigger) ---------------- */
+
+    public void setPriorityForSelected() {
+        int id = selectedIdOrMinus1();
+        if (id < 0 || vm == null) return;
+
+        String[] opts = {"NONE","LOW","MEDIUM","HIGH"};
+        String chosen = (String) JOptionPane.showInputDialog(
+                this, "Select priority:", "Priority",
+                JOptionPane.PLAIN_MESSAGE, null, opts, "NONE"
+        );
+        if (chosen == null) return;
+
+        try {
+            vm.setPriority(id, Priority.valueOf(chosen));
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            JOptionPane.showMessageDialog(this, "Failed to update priority",
+                    "Error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    /* ---------------- Renderer for Title column (Decorator) ---------------- */
 
     private static final class TitleCellRenderer extends DefaultTableCellRenderer {
         private static final Font BASE_FONT = new JLabel().getFont();
@@ -259,13 +320,34 @@ public class TasksPanel extends JPanel {
                 default -> Color.BLACK;
             };
         }
-
         private static Priority safePriority(String n) {
             try { return Priority.valueOf(n); } catch (Exception e) { return Priority.NONE; }
         }
-
         private static TaskState safeState(String n) {
             try { return TaskState.valueOf(n); } catch (Exception e) { return TaskState.TO_DO; }
         }
     }
+    private static final class StateCellRenderer extends DefaultTableCellRenderer {
+        @Override
+        public Component getTableCellRendererComponent(
+                JTable table, Object value, boolean isSelected, boolean hasFocus, int row, int column) {
+            JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
+
+            TaskState st;
+            if (value instanceof TaskState ts) {
+                st = ts;
+            } else {
+                try {
+                    st = TaskState.valueOf(Objects.toString(value, "TO_DO"));
+                } catch (Exception e) {
+                    st = TaskState.TO_DO;
+                }
+            }
+
+            lbl.setText(st.badge()); // shows friendly text
+            return lbl;
+        }
+    }
 }
+
+
