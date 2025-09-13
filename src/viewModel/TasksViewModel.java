@@ -60,11 +60,22 @@ public class TasksViewModel {
 
     /* ---------- Update/Delete ---------- */
 
-    public void update(int id, String title, String desc, TaskState state) throws TasksDAOException {
-        // שומרים על priority קיים
+    public void update(int id, String title, String desc, TaskState newState) throws TasksDAOException {
         var current = dao.getTask(id);
-        Priority p = (current instanceof TaskRecord tr) ? tr.priority() : Priority.NONE;
-        dao.updateTask(new TaskRecord(id, title, desc, state, p));
+        if (current == null) return;
+        // שמירת priority קיים
+        var p = (current instanceof TaskRecord tr) ? tr.priority() : Priority.NONE;
+
+        // בדיקת חוקיות מעבר לפי ה-STATE enum
+        if (current instanceof TaskRecord tr) {
+            if (!tr.state().canTransitionTo(newState)) {
+                throw new IllegalStateException(tr.state() + " → " + newState + " not allowed");
+            }
+            dao.updateTask(new TaskRecord(id, title, desc, newState, p));
+        } else {
+            // גיבוי: אם אי פעם יגיע סוג אחר
+            dao.updateTask(new TaskRecord(id, title, desc, newState, p));
+        }
         load();
     }
 
@@ -72,7 +83,6 @@ public class TasksViewModel {
         dao.deleteTask(id);
         load();
     }
-
     /* ---------- Priority API ל-View ---------- */
 
     public void setPriority(int id, Priority p) throws TasksDAOException {
@@ -84,4 +94,14 @@ public class TasksViewModel {
         dao.updateTask(tr);
         load();
     }
+
+    public java.util.List<model.TaskState> allowedNextStatesOf(int taskId) throws dao.TasksDAOException {
+        var t = dao.getTask(taskId);
+        if (t instanceof model.TaskRecord tr) {
+            return new java.util.ArrayList<>(tr.allowedNextStates());
+        }
+        // fallback אם אי פעם זה לא TaskRecord:
+        return java.util.Arrays.asList(model.TaskState.values());
+    }
+
 }

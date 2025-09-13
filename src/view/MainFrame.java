@@ -81,8 +81,24 @@ public class MainFrame extends JFrame {
 
             JTextField t = new JTextField(tasksPanel.currentTitle());
             JTextField d = new JTextField(tasksPanel.currentDesc());
-            JComboBox<String> s = new JComboBox<>(new String[]{"TO_DO","IN_PROGRESS","COMPLETED"});
-            s.setSelectedItem(tasksPanel.currentState());
+
+            // מצב נוכחי
+            String currentStateName = tasksPanel.currentState();
+
+            // בניית רשימת מצבים מותרת מה-VM (עם גיבוי אם vm==null/שגיאה)
+            java.util.LinkedHashSet<String> options = new java.util.LinkedHashSet<>();
+            options.add(currentStateName); // תמיד נאפשר "להשאיר כפי שהוא"
+            try {
+                for (var st : vm.allowedNextStatesOf(id)) options.add(st.name());
+            } catch (Exception ex) {
+                // גיבוי – לא נכשל אם vm לא מוכן
+                options.add("IN_PROGRESS");
+                options.add("COMPLETED");
+            }
+
+            JComboBox<String> s = new JComboBox<>(options.toArray(new String[0]));
+            s.setSelectedItem(currentStateName);
+
             Object[] form = {"Title:", t, "Description:", d, "State:", s};
             int ok = JOptionPane.showConfirmDialog(this, form, "Edit Task", JOptionPane.OK_CANCEL_OPTION);
             if (ok == JOptionPane.OK_OPTION) {
@@ -95,6 +111,7 @@ public class MainFrame extends JFrame {
                 cmd.execute(command);
             }
         });
+
 
         del.addActionListener(e -> {
             int id = tasksPanel.selectedIdOrMinus1();
