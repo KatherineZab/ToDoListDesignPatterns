@@ -10,6 +10,7 @@ import model.observable.TasksListener;
 import model.observable.TasksRepository;
 
 import java.util.*;
+import java.util.function.Consumer;
 
 public class TasksViewModel {
 
@@ -46,33 +47,49 @@ public class TasksViewModel {
         fireChanged(); // notifies on EDT
     }
 
-    /* ---------------- Create ---------------- */
+    /* ---------- Add ---------- */
 
     public int addReturningId(String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, Priority.NONE);
-        Set<Integer> before = currentIds();
-        dao.addTask(tr);
-        load();
-        return findNewIdAfterAdd(before, title, desc);
+        if (dao instanceof ITasksDAOWithIds idDao) { // NEW: interface pattern matching
+            int id = idDao.addTaskReturningId(tr);
+            load();
+            return id;
+        } else {
+            // Fallback: keep data consistent; caller will see there's no ID path
+            dao.addTask(tr);
+            load();
+            // You can return -1 or throw; your UI already catches exceptions and uses -1.
+            return -1;
+        }
     }
 
-    public int addWithPriorityReturningId(String title, String desc,
-                                          TaskState state, Priority priority) throws TasksDAOException {
-        var tr = new TaskRecord(0, title, desc, state, priority);
-        Set<Integer> before = currentIds();
-        dao.addTask(tr);
-        load();
-        return findNewIdAfterAdd(before, title, desc);
-    }
-
-    /** Official API cannot force an id; this adds content and DB assigns the id. */
     public void addWithId(int id, String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(id, title, desc, state, Priority.NONE);
-        dao.addTask(tr);
-        load();
+        if (dao instanceof ITasksDAOWithIds idDao) { // NEW
+            idDao.addTaskWithId(id, tr);
+            load();
+        } else {
+            // If the underlying DAO doesn't support this, fail loudly or silently – your choice.
+            throw new UnsupportedOperationException("addTaskWithId is not supported by this DAO");
+        }
     }
 
-    /* ---------------- Update / Delete ---------------- */
+    public int addWithPriorityReturningId(String title, String desc, TaskState state, Priority priority) throws TasksDAOException {
+        var tr = new TaskRecord(0, title, desc, state, priority);
+        if (dao instanceof ITasksDAOWithIds idDao) { // NEW
+            int id = idDao.addTaskReturningId(tr);
+            load();
+            return id;
+        } else {
+            // Fallback: insert without returning id
+            dao.addTask(tr);
+            load();
+            return -1;
+        }
+    }
+
+    /* ---------- Update/Delete ---------- */
 
     public void update(int id, String title, String desc, TaskState newState) throws TasksDAOException {
         var current = dao.getTask(id);
@@ -86,6 +103,10 @@ public class TasksViewModel {
             if (!r.state().canTransitionTo(newState)) {
                 throw new IllegalStateException(oldState + " → " + newState + " not allowed");
             }
+            dao.updateTask(new TaskRecord(id, title, desc, newState, p));
+        } else {
+            // גיבוי: אם אי פעם יגיע סוג אחר
+            dao.updateTask(new TaskRecord(id, title, desc, newState, p));
         }
 
         dao.updateTask(new TaskRecord(id, title, desc, newState, pr));
@@ -96,17 +117,14 @@ public class TasksViewModel {
         dao.deleteTask(id);
         load();
     }
-
-    /* ---------------- Priority ---------------- */
+    /* ---------- Priority API ל-View ---------- */
 
     public void setPriority(int id, Priority p) throws TasksDAOException {
         var current = dao.getTask(id);
         if (current == null) return;
-
         var tr = (current instanceof TaskRecord old)
                 ? new TaskRecord(old.id(), old.title(), old.description(), old.state(), p)
                 : new TaskRecord(current.getId(), current.getTitle(), current.getDescription(), current.getState(), p);
-
         dao.updateTask(tr);
         load();
     }
@@ -125,16 +143,52 @@ public class TasksViewModel {
         return s;
     }
 
-    private int findNewIdAfterAdd(Set<Integer> before, String title, String desc) {
-        for (var t : cache) {
-            if (!before.contains(t.getId())
-                    && Objects.equals(t.getTitle(), title)
-                    && Objects.equals(t.getDescription(), desc)) {
-                return t.getId();
+    /* ---------- Reports & Export (Visitor) ---------- */
+
+    /**
+     * Builds a human-readable combined report using the Visitor + pattern matching.
+     */
+    public String buildCombinedReport() throws TasksDAOException {
+        var visitor = new model.report.CombinedReportVisitor();
+        for (model.ITask t : dao.getTasks()) {
+            if (t instanceof model.TaskRecord tr) {
+                visitor.visit(tr); // record pattern matching יופעל בתוך ה-visitor
+            } else {
+                // fallback: אם אי פעם יגיע ITask שאינו record, נעטוף ל-TaskRecord עם priority NONE
+                var tr = new model.TaskRecord(
+                        t.getId(),
+                        t.getTitle(),
+                        t.getDescription(),
+                        t.getState(),
+                        model.entity.Priority.NONE
+                );
+                visitor.visit(tr);
             }
         }
-        int max = -1;
-        for (var t : cache) max = Math.max(max, t.getId());
-        return max;
+        return visitor.asText();
     }
+
+    /**
+     * Exports all tasks to CSV string using the Visitor + record pattern matching.
+     */
+    public String exportCSV() throws TasksDAOException {
+        var visitor = new model.report.CSVExportVisitor();
+        for (model.ITask t : dao.getTasks()) {
+            if (t instanceof model.TaskRecord tr) {
+                visitor.visit(tr);
+            } else {
+                var tr = new model.TaskRecord(
+                        t.getId(),
+                        t.getTitle(),
+                        t.getDescription(),
+                        t.getState(),
+                        model.entity.Priority.NONE
+                );
+                visitor.visit(tr);
+            }
+        }
+        return visitor.csv();
+    }
+
+
 }

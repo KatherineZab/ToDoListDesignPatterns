@@ -9,7 +9,7 @@ import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class TasksDAODerby implements ITasksDAO {
+public final class TasksDAODerby implements ITasksDAO, ITasksDAOWithIds {
     /**
      * JVM-safe, lazy-loaded singleton holder for TasksDAODerby.
      */

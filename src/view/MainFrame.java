@@ -56,6 +56,7 @@ public class MainFrame extends JFrame {
         JButton sortClear = new JButton("Sort: Clear");
         JButton reportBtn = new JButton("Report");
 
+        // סדר הכפתורים בפאנל
         p.add(reportBtn);
         p.add(sortPrio);
         p.add(sortClear);
@@ -208,84 +209,54 @@ public class MainFrame extends JFrame {
 
         // Visitor pattern for reports
         reportBtn.addActionListener(e -> {
-            if (!ensureVmOrWarn()) return;
-
-            var summaryVisitor = new model.report.CombinedReportVisitor();
-            for (var task : vm.items()) {
-                if (task instanceof model.TaskRecord tr) {
-                    summaryVisitor.visit(tr);
-                }
+            if (vm == null) {
+                JOptionPane.showMessageDialog(this, "ViewModel not set", "Error", JOptionPane.ERROR_MESSAGE);
+                return;
             }
+            try {
+                // דו"ח מסוכם — ה-VM מריץ Visitor בפנים
+                String text = vm.buildCombinedReport();
 
-            String reportText = summaryVisitor.asText();
+                JTextArea area = new JTextArea(text, 18, 50);
+                area.setEditable(false);
+                JScrollPane scroll = new JScrollPane(area);
 
-            JTextArea textArea = new JTextArea(reportText, 18, 50);
-            textArea.setEditable(false);
-            JScrollPane scrollPane = new JScrollPane(textArea);
+                Object[] options = {"Export CSV...", "Close"};
+                int choice = JOptionPane.showOptionDialog(
+                        this, scroll, "Tasks Report",
+                        JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE,
+                        null, options, options[1]
+                );
 
-            Object[] options = {"Export CSV...", "Close"};
-            int choice = JOptionPane.showOptionDialog(
-                    this, scrollPane, "Tasks Report",
-                    JOptionPane.YES_NO_OPTION, JOptionPane.INFORMATION_MESSAGE,
-                    null, options, options[1]
-            );
+                if (choice == 0) {
+                    // ייצוא CSV — ה-VM מריץ Visitor בפנים
+                    String csv = vm.exportCSV();
 
-            if (choice == 0) {
-                exportCsvReport();
+                    javax.swing.JFileChooser fc = new javax.swing.JFileChooser();
+                    fc.setSelectedFile(new java.io.File("tasks_report.csv"));
+                    if (fc.showSaveDialog(this) == javax.swing.JFileChooser.APPROVE_OPTION) {
+                        try {
+                            java.nio.file.Files.writeString(
+                                    fc.getSelectedFile().toPath(),
+                                    csv,
+                                    java.nio.charset.StandardCharsets.UTF_8
+                            );
+                            JOptionPane.showMessageDialog(this,
+                                    "CSV saved to:\n" + fc.getSelectedFile().getAbsolutePath(),
+                                    "Export CSV", JOptionPane.INFORMATION_MESSAGE);
+                        } catch (Exception ex) {
+                            JOptionPane.showMessageDialog(this,
+                                    "Failed to save CSV: " + ex.getMessage(),
+                                    "Error", JOptionPane.ERROR_MESSAGE);
+                        }
+                    }
+                }
+            } catch (dao.TasksDAOException ex) {
+                JOptionPane.showMessageDialog(this, ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
             }
         });
+        // === END REPORT ===
 
         return p;
-    }
-
-    /**
-     * CORRECT MVVM: Get selected task through ViewModel, not direct View access
-     * This method abstracts the View selection logic and returns business data
-     */
-    private model.TaskRecord getSelectedTaskFromViewModel() {
-        // This is the proper way: let the View handle its own selection,
-        // but expose only business data to the controller layer
-        int selectedId = tasksPanel.selectedIdOrMinus1();
-        if (selectedId < 0) return null;
-
-        try {
-            var task = vm.getById(selectedId);
-            return (task instanceof model.TaskRecord tr) ? tr : null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    /**
-     * CSV Export using Visitor pattern
-     */
-    private void exportCsvReport() {
-        var csvVisitor = new model.report.CSVExportVisitor();
-        for (var task : vm.items()) {
-            if (task instanceof model.TaskRecord tr) {
-                csvVisitor.visit(tr);
-            }
-        }
-        String csvContent = csvVisitor.csv();
-
-        JFileChooser fileChooser = new JFileChooser();
-        fileChooser.setSelectedFile(new java.io.File("tasks_report.csv"));
-
-        if (fileChooser.showSaveDialog(this) == JFileChooser.APPROVE_OPTION) {
-            try {
-                java.nio.file.Files.writeString(
-                        fileChooser.getSelectedFile().toPath(),
-                        csvContent,
-                        java.nio.charset.StandardCharsets.UTF_8
-                );
-                JOptionPane.showMessageDialog(this,
-                        "CSV exported successfully to:\n" + fileChooser.getSelectedFile().getAbsolutePath(),
-                        "Export Complete", JOptionPane.INFORMATION_MESSAGE);
-            } catch (Exception ex) {
-                JOptionPane.showMessageDialog(this,
-                        "Failed to export CSV: " + ex.getMessage(),
-                        "Export Error", JOptionPane.ERROR_MESSAGE);
-            }
-        }
     }
 }
