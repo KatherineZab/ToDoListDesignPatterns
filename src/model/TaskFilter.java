@@ -1,4 +1,4 @@
-package model.combinator;
+package model;
 
 @FunctionalInterface
 public interface TaskFilter {

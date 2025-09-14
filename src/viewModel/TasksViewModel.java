@@ -10,8 +10,8 @@ import model.entity.Priority;
 import model.observable.TasksListener;
 import model.observable.TasksRepository;
 import model.sort.TaskSortStrategy;
-import model.combinator.TaskFilter;
-import model.combinator.Filters;
+import model.TaskFilter;
+import model.Filters;
 
 import java.util.*;
 import java.util.stream.Collectors;
