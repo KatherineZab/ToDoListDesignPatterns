@@ -2,7 +2,8 @@ package viewModel;
 
 import dao.ITasksDAO;
 import dao.TasksDAOException;
-import dao.TasksDAODerby;
+//import dao.TasksDAODerby;
+import dao.ITasksDAOWithIds;
 import model.ITask;
 import model.TaskRecord;
 import model.TaskState;
@@ -15,6 +16,7 @@ import model.Filters;
 
 import java.util.*;
 import java.util.stream.Collectors;
+
 
 public class TasksViewModel {
 
@@ -99,39 +101,44 @@ public class TasksViewModel {
 
     public int addReturningId(String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, Priority.NONE);
-        if (dao instanceof TasksDAODerby derbyDao) {
-            int id = derbyDao.addTaskReturningId(tr);
-            load();
-            return id;
+        int id;
+        if (dao instanceof ITasksDAOWithIds withIds) {
+            id = withIds.addTaskReturningId(tr);   // real DB id
         } else {
-            dao.addTask(tr);
-            load();
-            return -1;
+            dao.addTask(tr);                       // persist without returning id
+            id = -1;
         }
+        load();                                    // refresh + notify observers
+        return id;
     }
+
+
 
     public void addWithId(int id, String title, String desc, TaskState state) throws TasksDAOException {
         var tr = new TaskRecord(id, title, desc, state, Priority.NONE);
-        if (dao instanceof TasksDAODerby derbyDao) {
-            derbyDao.addTaskWithId(id, tr);
-            load();
+        if (dao instanceof ITasksDAOWithIds withIds) {
+            withIds.addTaskWithId(id, tr);
         } else {
             throw new UnsupportedOperationException("addTaskWithId is not supported by this DAO");
         }
+        load();                                    // refresh + notify observers
     }
+
 
     public int addWithPriorityReturningId(String title, String desc, TaskState state, Priority priority) throws TasksDAOException {
         var tr = new TaskRecord(0, title, desc, state, priority);
-        if (dao instanceof TasksDAODerby derbyDao) {
-            int id = derbyDao.addTaskReturningId(tr);
-            load();
-            return id;
+        int id;
+        if (dao instanceof ITasksDAOWithIds withIds) {
+            id = withIds.addTaskReturningId(tr);   // real DB id
         } else {
             dao.addTask(tr);
-            load();
-            return -1;
+            id = -1;
         }
+        load();                                    // refresh + notify observers
+        return id;
     }
+
+
 
     /* ---------------- Update / Delete ---------------- */
 
