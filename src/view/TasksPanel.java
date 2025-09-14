@@ -133,19 +133,17 @@ public class TasksPanel extends JPanel {
     /* ---------------- Selection helpers (שומרים חתימות) ---------------- */
 
     public int selectedIdOrMinus1() {
-        JTable tbl = selectedTable();
-        int viewRow = tbl.getSelectedRow();
+        int viewRow = table.getSelectedRow();
         if (viewRow < 0) return -1;
-        int modelRow = tbl.convertRowIndexToModel(viewRow);
-        DefaultTableModel m = modelOf(tbl);
-        Object val = m.getValueAt(modelRow, 0);
+        int modelRow = table.convertRowIndexToModel(viewRow);
+        Object val = model.getValueAt(modelRow, 0);
         return (val instanceof Integer) ? (Integer) val : Integer.parseInt(val.toString());
     }
 
     /** תמיד מחזיר את הטבלה היחידה (כדי לא לשנות קריאות קיימות). */
-    private JTable selectedTable() {
-        return table;
-    }
+//    private JTable selectedTable() {
+//        return table;
+//    }
 
     /** תמיד מחזיר את המודל היחיד (כדי לא לשנות קריאות קיימות). */
     private DefaultTableModel modelOf(JTable t) {

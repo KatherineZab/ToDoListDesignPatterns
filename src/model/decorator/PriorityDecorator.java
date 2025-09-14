@@ -4,10 +4,8 @@ import model.ITask;
 import model.entity.Priority;
 
 /**
- * PriorityDecorator — Decorator ל-ITask.
- * אינו מחזיר HTML ואינו מוסיף טקסט (ללא prefix).
- * ההעשרה הוויזואלית (צבע/קו-חוצה) מתבצעת ברמת ה-View (renderer של הטבלה),
- * בעוד שהדקורטור משמש כנקודת הרחבה מבלי לשנות את מחלקות המודל/DAO.
+ * PriorityDecorator - Actually decorates ITask titles with priority indicators.
+ * Now performs real decoration by enhancing the title based on priority level.
  */
 public final class PriorityDecorator extends AbstractTaskDecorator {
     private final Priority priority;
@@ -17,13 +15,23 @@ public final class PriorityDecorator extends AbstractTaskDecorator {
         this.priority = (priority == null) ? Priority.NONE : priority;
     }
 
-    /** מחזיר את הכותרת המקורית; ה-View מעצב (צבע/קו-חוצה) לפי priority/state. */
+    /**
+     * Decorates the title with priority indicators - this is the core Decorator behavior
+     */
     @Override
     public String getTitle() {
-        return inner.getTitle();
+        String baseTitle = inner.getTitle();
+        return switch (priority) {
+            case HIGH -> "● " + baseTitle;     // Red circle
+            case MEDIUM -> "● " + baseTitle;   // Orange circle
+            case LOW -> "● " + baseTitle;      // Gray circle
+            case NONE -> baseTitle;
+        };
     }
 
-    /** אופציונלי: מאפשר לשכבת התצוגה לשאול מה ה-priority שהוזרק לדקורטור. */
+    /**
+     * Allows View layer to access the priority for additional styling
+     */
     public Priority getPriority() {
         return priority;
     }
