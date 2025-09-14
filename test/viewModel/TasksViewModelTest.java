@@ -21,8 +21,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Unit tests for TasksViewModel - tests business logic with mock DAO
- * This tests the ViewModel layer without actual database dependency
+ * Unit tests for {@link TasksViewModel} using a mock DAO (no real DB).
+ * Verifies filtering (Combinator), sorting (Strategy), observer notifications,
+ * CRUD flows, and Visitor-based report/CSV generation.
  */
 class TasksViewModelTest {
 
@@ -31,6 +32,7 @@ class TasksViewModelTest {
     private List<ITask> notifiedTasks;
     private boolean wasNotified;
 
+    //Creates a fresh ViewModel with a mock DAO and attaches a test listener.
     @BeforeEach
     void setUp() {
         mockDao = new MockTasksDAO();
@@ -64,6 +66,7 @@ class TasksViewModelTest {
         assertEquals(2, newVm.items().size());
     }
 
+    //applyFilter should combine text+state filters and return only matches
     @Test
     @DisplayName("applyFilter should filter tasks using Combinator pattern")
     void testApplyFilter() throws TasksDAOException {
@@ -143,6 +146,7 @@ class TasksViewModelTest {
     }
 
 
+    //Observer path: listeners must be notified when data changes
     @Test
     @DisplayName("Observer notifies listeners when data changes")
     void testObserverNotification() throws Exception {
@@ -154,12 +158,12 @@ class TasksViewModelTest {
             notifiedTasks.clear();
             notifiedTasks.addAll(tasks);
             wasNotified = true;
-            latch.countDown();   // אות שקיבלנו עדכון
+            latch.countDown();
         });
 
         viewModel.addReturningId("New Task", "Description", TaskState.TO_DO);
 
-        // ממתינים לאסינכרון (EDT) במקום Thread.sleep
+        //  Thread.sleep
         assertTrue(latch.await(1, TimeUnit.SECONDS), "Listener wasn't notified in time");
 
         assertTrue(wasNotified);
@@ -167,6 +171,7 @@ class TasksViewModelTest {
         assertEquals("New Task", notifiedTasks.get(0).getTitle());
     }
 
+    //addReturningId should persist and return a positive id (or -1 if unsupported).
     @Test
     @DisplayName("addReturningId should create task and return ID")
     void testAddReturningId() throws TasksDAOException {
@@ -195,6 +200,7 @@ class TasksViewModelTest {
         assertEquals(TaskState.IN_PROGRESS, updated.getState());
     }
 
+    //update must reject invalid transitions
     @Test
     @DisplayName("update should validate state transitions")
     void testUpdateStateTransitionValidation() throws TasksDAOException {
@@ -226,6 +232,7 @@ class TasksViewModelTest {
         assertEquals(0, viewModel.items().size());
     }
 
+    //setPriority should update the priority while keeping other fields intact
     @Test
     @DisplayName("setPriority should update task priority")
     void testSetPriority() throws TasksDAOException {
@@ -242,6 +249,7 @@ class TasksViewModelTest {
         assertEquals(Priority.HIGH, ((TaskRecord) updated).priority());
     }
 
+    //generateCombinedReport should produce a text summary via the Visitor
     @Test
     @DisplayName("generateCombinedReport should use Visitor pattern")
     void testGenerateCombinedReport() throws TasksDAOException {
@@ -262,6 +270,7 @@ class TasksViewModelTest {
         assertTrue(report.contains("COMPLETED:   1"));
     }
 
+    //exportCSV should build CSV content via the Visitor (header + rows)
     @Test
     @DisplayName("exportCSV should use Visitor pattern")
     void testExportCSV() throws TasksDAOException {
@@ -370,6 +379,7 @@ class TasksViewModelTest {
 
         // ---------- ITasksDAOWithIds ----------
 
+        //Adds and returns a generated id (auto-increment), like a real DB would.
         @Override
         public int addTaskReturningId(ITask task) /* throws TasksDAOException */ {
             int id = nextId++;
@@ -380,15 +390,5 @@ class TasksViewModelTest {
             return id;
         }
 
-        @Override
-        public void addTaskWithId(int id, ITask task) /* throws TasksDAOException */ {
-            // insert with explicit id (used when caller already knows the id)
-            TaskRecord rec = (task instanceof TaskRecord tr)
-                    ? new TaskRecord(id, tr.title(), tr.description(), tr.state(), tr.priority())
-                    : new TaskRecord(id, task.getTitle(), task.getDescription(), task.getState(), Priority.NONE);
-            tasks.add(rec);
-            nextId = Math.max(nextId, id + 1);
-        }
     }
-
 }

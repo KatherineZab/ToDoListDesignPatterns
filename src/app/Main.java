@@ -13,7 +13,7 @@ import javax.swing.SwingUtilities;
 
 public class Main {
 
-    // --- Bootstrap model & view-model dependencies (no UI work here) ---
+    // Bootstrap model & view-model dependencies (no UI work here)
     public static void main(String[] args) {
         // Singleton DAO
         var dao = TasksDAODerby.getInstance();

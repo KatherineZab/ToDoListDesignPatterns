@@ -13,6 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("CommandManager – Execute / Undo / Redo Tests")
 class CommandManagerTest {
 
+    // Creates a fresh CommandManager and two test commands before each test.
     private CommandManager manager;
     private TestCommand command1;
     private TestCommand command2;

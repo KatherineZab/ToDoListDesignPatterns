@@ -18,15 +18,4 @@ public interface ITasksDAOWithIds {
      * and the returned value tells the caller what ID was assigned.
      */
     int  addTaskReturningId(ITask task) throws TasksDAOException;
-
-    /**
-     * Persists a new task with an explicit identifier.
-     * Useful for import flows, undo/redo snapshot replays, or replication.
-     * This method is intended for special flows where the ID must remain fixed:
-     * Undo/Redo:restoring a previously deleted task with
-     * ID (so that references remain consistent)
-     * bringing tasks from another source while
-     * preserving their original IDs.
-     */
-    void addTaskWithId(int id, ITask task) throws TasksDAOException;
 }

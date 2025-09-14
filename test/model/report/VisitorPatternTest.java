@@ -25,6 +25,7 @@ class VisitorPatternTest {
     private TaskRecord noPriorityTask;
     private TaskRecord completedTask;
 
+    //Prepare sample tasks with different states and priorities for reuse.
     @BeforeEach
     void setUp() {
         highPriorityTask   = new TaskRecord(1, "Critical Bug",   "Fix ASAP",
@@ -45,6 +46,10 @@ class VisitorPatternTest {
 
     // ---------- Helpers ----------
 
+    /**
+     * Assert that the report contains a line like: "LABEL: expected".
+     * Spaces are flexible; match is done per-line.
+     */
     private void assertCountLine(String report, String label, int expected) {
         // Match lines like: "HIGH:   1" or "IN_PROGRESS: 2" with flexible spaces.
         Pattern p = Pattern.compile("(?m)^\\s*" + Pattern.quote(label) + ":\\s*" + expected + "\\s*$");
@@ -52,12 +57,17 @@ class VisitorPatternTest {
                 () -> "Expected line '" + label + ": " + expected + "' in report:\n" + report);
     }
 
+    //Split CSV text into lines
     private String[] csvLines(String csv) {
         return csv.replace("\r\n", "\n").split("\n");
     }
 
     // ---------- CombinedReportVisitor ----------
 
+    /**
+     * Checks that priorities are counted correctly:
+     * HIGH=1, MEDIUM=2, LOW=1, NONE=1 with the prepared samples.
+     */
     @Test
     @DisplayName("CombinedReportVisitor counts by priority")
     void combinedReport_countsByPriority() {
@@ -78,6 +88,10 @@ class VisitorPatternTest {
         assertCountLine(report, "NONE",     1);
     }
 
+    /**
+     * Checks that states are counted correctly:
+     * TO_DO=2, IN_PROGRESS=2, COMPLETED=1 with the prepared samples.
+     */
     @Test
     @DisplayName("CombinedReportVisitor counts by state")
     void combinedReport_countsByState() {
@@ -96,6 +110,10 @@ class VisitorPatternTest {
         assertCountLine(report, "COMPLETED",   1);
     }
 
+    /**
+     * Checks the empty report case:
+     * total=0 and all buckets are 0.
+     */
     @Test
     @DisplayName("CombinedReportVisitor handles empty visitor")
     void combinedReport_empty() {
@@ -113,16 +131,14 @@ class VisitorPatternTest {
         assertCountLine(report, "COMPLETED",   0);
     }
 
-    /**
-     * Note: If your CombinedReportVisitor does NOT accept nulls (i.e., it throws or NPEs),
-     * remove this test OR change it to assertThrows. The version below assumes it simply ignores nulls.
-     */
+
+    // Verifies that a null task is ignored
     @Test
-    @DisplayName("CombinedReportVisitor gracefully ignores null tasks (if supported)")
+    @DisplayName("CombinedReportVisitor gracefully ignores null tasks")
     void combinedReport_ignoresNulls() {
         CombinedReportVisitor visitor = new CombinedReportVisitor();
         visitor.visit(highPriorityTask);
-        visitor.visit(null); // should be ignored by implementation (if you implemented it this way)
+        visitor.visit(null);
         visitor.visit(mediumPriorityTask);
 
         String report = visitor.asText();
@@ -134,6 +150,10 @@ class VisitorPatternTest {
 
     // ---------- CSVExportVisitor ----------
 
+    /**
+     * Checks that CSV has a header and one row per visited task
+     * with fields in the expected order.
+     */
     @Test
     @DisplayName("CSVExportVisitor produces header and rows")
     void csv_basicFormat() {
@@ -179,9 +199,7 @@ class VisitorPatternTest {
         // Header exists
         assertEquals("id,title,description,state,priority", lines[0]);
 
-        // RFC4180-style escaping: fields containing comma or quote must be quoted,
-        // and inner double quotes must be doubled.
-        // Line for 'withCommas' should contain quoted title/description.
+        //fields containing comma or quote must be quoted,
         assertTrue(lines[1].contains("\"Task, with commas\""));
         assertTrue(lines[1].contains("\"Description, also with commas\""));
 

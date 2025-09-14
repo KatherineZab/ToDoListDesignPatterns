@@ -1,5 +1,5 @@
  package model;
-// keep your existing `package ...;` line here
+
 
  import java.util.EnumSet;
  import java.util.Set;
@@ -7,7 +7,8 @@
  /**
   * State pattern (enum-based) representing the lifecycle of a task.
   * ToDo -> InProgress -> Completed -> (REOPEN) -> ToDo
-  * כל מצב מגדיר את המעברים המותרים ממנו.
+  * Each state declares the set of states it can move to (see {@link #nextStates()}).
+  * UI can use {@link #badge()} for a friendly label.
   */
  public enum TaskState {
      TO_DO {
@@ -24,32 +25,33 @@
          @Override public String badge() { return "In Progress"; }
      },
 
+     // Reopen is allowed: COMPLETED → TO_DO
      COMPLETED {
          @Override public Set<TaskState> nextStates() {
-             // REOPEN מותר — מעבר חזרה ל-TO_DO
              return EnumSet.of(TO_DO);
          }
+         // Not a final state because reopen is allowed
          @Override public boolean isTerminal() {
-             // לא מצב סופי לחלוטין כי מרשים Reopen
              return false;
          }
          @Override public String badge() { return "Completed"; }
      };
 
-     /** המצבים שאליהם מותר לעבור ממצב זה */
+     //Allowed next states from this state
      public abstract Set<TaskState> nextStates();
 
-     /** האם מותר מעבר למצב המבוקש */
+     /** @return true if {@code next} is one of {@link #nextStates()};
+      *  null is treated as not allowed.
+      */
      public final boolean canTransitionTo(TaskState next) {
          return nextStates().contains(next);
      }
 
-     /** האם זה מצב סופי (ברירת מחדל: אין מעברים קדימה) */
      public boolean isTerminal() {
          return nextStates().isEmpty();
      }
 
-     /** טקסט ידידותי ל-UI (תג/Badge) */
+     // Short, user-friendly label for UI.
      public String badge() {
          return name();
      }

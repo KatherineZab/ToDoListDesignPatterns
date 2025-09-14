@@ -8,6 +8,15 @@ import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.*;
 
+/**
+ * Unit tests for {@link TaskFilter} and {@link Filters}.
+ * Verifies:
+ * - any(): always true, including for null inputs.
+ * - textContains(q): case-insensitive match on title/description; trims q; blank/null q behaves like any().
+ * - stateIs(st): exact match; "ALL" disables state filtering.
+ * - Logical combinators: AND / OR / NOT and complex chaining.
+ */
+
 @DisplayName("TaskFilter & Filters (Combinator) – Unit Tests")
 class TaskFilterTest {
 
@@ -15,6 +24,10 @@ class TaskFilterTest {
     private String testDescription;
     private String testState;
 
+    /**
+     * Initializes common sample values used by multiple tests.
+     * Title contains the word "bug"; description mentions "memory"; state is IN_PROGRESS.
+     */
     @BeforeEach
     void setUp() {
         testTitle = "Fix critical bug";
@@ -22,6 +35,10 @@ class TaskFilterTest {
         testState = "IN_PROGRESS";
     }
 
+    /**
+     * Ensures any() always returns {@code true}, regardless of inputs,
+     * including empty strings and {@code null} values.
+     */
     @Test
     @DisplayName("any() should always return true (including nulls)")
     void testAnyFilterAlwaysReturnsTrue() {
@@ -55,6 +72,8 @@ class TaskFilterTest {
         assertTrue(spaceFilter.test("title", "desc", "state"));
     }
 
+
+    
     @Test
     @DisplayName("stateIs matches exactly; 'ALL' behaves like any()")
     void testStateIsFilter() {

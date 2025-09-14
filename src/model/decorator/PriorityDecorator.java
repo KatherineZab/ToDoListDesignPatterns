@@ -6,6 +6,9 @@ import model.entity.Priority;
 /**
  * PriorityDecorator - Actually decorates ITask titles with priority indicators.
  * Now performs real decoration by enhancing the title based on priority level.
+ * It wraps another ITask and only changes how the title looks.
+ * The original task is not modified; DAOs still work with the wrapped task.
+ * Used for display only (UI layer).
  */
 public final class PriorityDecorator extends AbstractTaskDecorator {
     private final Priority priority;
@@ -15,9 +18,7 @@ public final class PriorityDecorator extends AbstractTaskDecorator {
         this.priority = (priority == null) ? Priority.NONE : priority;
     }
 
-    /**
-     * Decorates the title with priority indicators - this is the core Decorator behavior
-     */
+    //Decorates the title with priority indicators - this is the core Decorator behavior
     @Override
     public String getTitle() {
         String baseTitle = inner.getTitle();
@@ -29,9 +30,8 @@ public final class PriorityDecorator extends AbstractTaskDecorator {
         };
     }
 
-    /**
-     * Allows View layer to access the priority for additional styling
-     */
+
+    //Allows View layer to access the priority for additional styling
     public Priority getPriority() {
         return priority;
     }
