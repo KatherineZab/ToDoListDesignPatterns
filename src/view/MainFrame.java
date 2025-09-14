@@ -68,7 +68,7 @@ public class MainFrame extends JFrame {
         JButton redo      = new JButton("Redo");
         JButton prio      = new JButton("Priority");
         JButton reportBtn = new JButton("Report");
-        JButton clearAll  = new JButton("Clear All");
+        JButton deleteAll  = new JButton("Delete All");
 
         p.add(reportBtn);
         p.add(add);
@@ -77,7 +77,7 @@ public class MainFrame extends JFrame {
         p.add(undo);
         p.add(redo);
         p.add(prio);
-        p.add(clearAll);
+        p.add(deleteAll);
 
         // ADD — View -> Command -> ViewModel
         add.addActionListener(e -> {
@@ -101,7 +101,7 @@ public class MainFrame extends JFrame {
         });
 
         // Clear All — Command עם Undo/Redo
-        clearAll.addActionListener(e -> {
+        deleteAll.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
             int ok = JOptionPane.showConfirmDialog(
                     this,
