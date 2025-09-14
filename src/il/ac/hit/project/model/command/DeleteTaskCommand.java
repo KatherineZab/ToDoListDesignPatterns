@@ -3,7 +3,7 @@ package il.ac.hit.project.model.command;
 import il.ac.hit.project.model.ITask;
 import il.ac.hit.project.model.TaskRecord;
 import il.ac.hit.project.model.entity.Priority;
-import il.ac.hit.project.viewModel.TasksViewModel;
+import il.ac.hit.project.viewmodel.TasksViewModel;
 
 /**
  * Command that deletes a single task with proper undo/redo support.

@@ -2,7 +2,7 @@ package il.ac.hit.project.app;
 
 import il.ac.hit.project.dao.TasksDAODerby;
 import il.ac.hit.project.view.MainFrame;
-import il.ac.hit.project.viewModel.TasksViewModel;
+import il.ac.hit.project.viewmodel.TasksViewModel;
 
 import javax.swing.SwingUtilities;
 

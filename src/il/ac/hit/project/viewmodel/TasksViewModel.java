@@ -1,4 +1,4 @@
-package il.ac.hit.project.viewModel;
+package il.ac.hit.project.viewmodel;
 
 import il.ac.hit.project.dao.ITasksDAO;
 import il.ac.hit.project.dao.TasksDAOException;

@@ -9,7 +9,7 @@ import il.ac.hit.project.model.decorator.PriorityDecorator;
 import il.ac.hit.project.model.sort.ByState;
 import il.ac.hit.project.model.sort.ByPriority;
 
-import il.ac.hit.project.viewModel.TasksViewModel;
+import il.ac.hit.project.viewmodel.TasksViewModel;
 
 import javax.swing.*;
 import javax.swing.table.DefaultTableCellRenderer;

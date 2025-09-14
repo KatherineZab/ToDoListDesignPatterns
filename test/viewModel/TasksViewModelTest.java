@@ -9,7 +9,7 @@ import il.ac.hit.project.model.TaskState;
 import il.ac.hit.project.model.entity.Priority;
 import il.ac.hit.project.model.observable.TasksListener;
 import il.ac.hit.project.model.sort.ByPriority;
-import il.ac.hit.project.viewModel.TasksViewModel;
+import il.ac.hit.project.viewmodel.TasksViewModel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

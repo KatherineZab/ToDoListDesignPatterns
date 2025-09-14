@@ -1,7 +1,7 @@
 package il.ac.hit.project.view;
 
 import il.ac.hit.project.model.command.*;
-import il.ac.hit.project.viewModel.TasksViewModel;
+import il.ac.hit.project.viewmodel.TasksViewModel;
 import il.ac.hit.project.model.TaskState;
 import il.ac.hit.project.model.TaskRecord;
 import il.ac.hit.project.model.entity.Priority;

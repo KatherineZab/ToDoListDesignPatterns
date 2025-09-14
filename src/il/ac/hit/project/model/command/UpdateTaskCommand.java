@@ -4,7 +4,7 @@ import il.ac.hit.project.model.ITask;
 import il.ac.hit.project.model.TaskRecord;
 import il.ac.hit.project.model.TaskState;
 import il.ac.hit.project.model.entity.Priority;
-import il.ac.hit.project.viewModel.TasksViewModel;
+import il.ac.hit.project.viewmodel.TasksViewModel;
 
 /**
  * Command that updates a task's title, description, and state with full undo support.
