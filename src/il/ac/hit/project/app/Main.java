@@ -9,6 +9,7 @@ import javax.swing.SwingUtilities;
 /**
  * Program entry point. Creates the DAO and ViewModel, then constructs and shows the main frame
  * on the Event Dispatch Thread (EDT).
+ *
  */
 
 public class Main {
