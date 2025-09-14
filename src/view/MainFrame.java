@@ -9,14 +9,26 @@ import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
 
-
+/**
+ * Main application window (Swing).
+ * Shows:
+ *  - FiltersPanel at the top (search, state, sort).
+ *  - TasksPanel in the center (table/list of tasks).
+ *  - CRUD + actions bar at the bottom (add, edit, delete, undo/redo, priority, reports).
+ * Binds UI actions to Commands and the {@link TasksViewModel}.
+ */
 public class MainFrame extends JFrame {
+    //Command manager for undo/redo of user actions.
     private final model.command.CommandManager cmd = new model.command.CommandManager();
+    //shows tasks
     private final TasksPanel tasksPanel = new TasksPanel();
+    //Top bar: search/state/sort
     private final FiltersPanel filtersPanel = new FiltersPanel();
 
+    //Bound ViewModel
     private TasksViewModel vm;
 
+    //Builds the main frame UI and wires the filter/sort apply action.
     public MainFrame() {
         super("Tasks Management System");
         setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
@@ -26,15 +38,14 @@ public class MainFrame extends JFrame {
         add(tasksPanel, BorderLayout.CENTER);
         add(buildCrudBar(), BorderLayout.SOUTH);
 
-        // Apply: גם סינון (כמו קודם) וגם מיון לפי ה-Sort ב-FiltersPanel
+        // Apply button: run both filtering and sorting based on FiltersPanel values.
         filtersPanel.setApplyAction(e -> {
             if (!ensureVmOrWarn()) return;
 
-            // 1) סינון (Combinator ב-VM דרך ה-View)
+            // (1) Filtering: delegate to TasksPanel (which will talk to the ViewModel)
             tasksPanel.applyFilter(filtersPanel.getQuery(), filtersPanel.getState());
 
-            // 2) מיון (Strategy ב-VM דרך ה-View)
-            // מצופה שקיים getSortKey() שמחזיר: "PRIORITY" / "STATE" / "NONE"
+            // (2) Sorting: choose strategy by key and apply via TasksPanel
             String sortKey = filtersPanel.getSortKey();
             switch (sortKey) {
                 case "PRIORITY" -> tasksPanel.sortByPriorityHighToLow();
@@ -47,17 +58,23 @@ public class MainFrame extends JFrame {
         setLocationRelativeTo(null);
     }
 
+    //Connects a ViewModel to this frame and forwards it to child views.
     public void setViewModel(TasksViewModel vm) {
         this.vm = vm;
         this.tasksPanel.setViewModel(vm);
     }
 
+    //Ensures a ViewModel is set; shows an error dialog if not.
     private boolean ensureVmOrWarn() {
         if (vm != null) return true;
         JOptionPane.showMessageDialog(this, "ViewModel not set", "Error", JOptionPane.ERROR_MESSAGE);
         return false;
     }
 
+    /**
+     * Bottom action bar: Add/Edit/Delete, Undo/Redo, Priority, Report, Delete All.
+     * Wires each button to the proper Command or ViewModel call.
+     */
     private JComponent buildCrudBar() {
         JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT));
 
@@ -100,7 +117,7 @@ public class MainFrame extends JFrame {
             }
         });
 
-        // Clear All — Command עם Undo/Redo
+        //  Clear ALL — destructive action with Undo/Redo via Command
         deleteAll.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
             int ok = JOptionPane.showConfirmDialog(
@@ -140,6 +157,7 @@ public class MainFrame extends JFrame {
             JTextField titleField = new JTextField(selectedTask.title(), 20);
             JTextField descField  = new JTextField(selectedTask.description(), 20);
 
+            //Allowed states: current + next allowed
             java.util.LinkedHashSet<String> allowedStates = new java.util.LinkedHashSet<>();
             allowedStates.add(selectedTask.state().name());
             try {
@@ -204,7 +222,7 @@ public class MainFrame extends JFrame {
             }
         });
 
-        // Priority (עם Undo/Redo דרך Command)
+        // PRIORITY — change priority via Command (supports undo/redo)
         prio.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
 
@@ -234,15 +252,15 @@ public class MainFrame extends JFrame {
         undo.addActionListener(e -> cmd.undo());
         redo.addActionListener(e -> cmd.redo());
 
-        // Sort buttons למטה (ללא שינוי)
+        // Sort buttons
         filtersPanel.setClearAction(e -> {
             if (!ensureVmOrWarn()) return;
-            vm.clearFilter();          // מבטל סינון ב-VM
-            tasksPanel.clearSort();    // מבטל מיון (קורא vm.setSortStrategy(null))
-            filtersPanel.reset();      // מאפס את שדות הפאנל עצמו
+            vm.clearFilter();          // clear filter state in VM
+            tasksPanel.clearSort();    // clear sort (calls vm.setSortStrategy(null))
+            filtersPanel.reset();      // reset filter panel controls
         });
 
-        // Reports (Visitor inside VM)
+        // REPORTS — generate a text report, optionally export CSV
         reportBtn.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
 

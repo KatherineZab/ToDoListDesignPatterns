@@ -145,7 +145,6 @@ class TaskStateTest {
         IllegalStateException ex = assertThrows(IllegalStateException.class,
                 () -> task.withState(TaskState.COMPLETED));
 
-        // keep message checks resilient but meaningful
         String msg = ex.getMessage() == null ? "" : ex.getMessage();
         assertTrue(msg.toLowerCase().contains("not allowed"));
         assertTrue(msg.contains("TO_DO"));

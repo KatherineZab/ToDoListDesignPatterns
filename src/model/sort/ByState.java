@@ -10,10 +10,13 @@ import java.util.Map;
 /**
  * Strategy: sort tasks by state.
  * Order: TO_DO first, then IN_PROGRESS, COMPLETED last.
- * Tiebreakers: title (case-insensitive), then id.
+ * title (case-insensitive), then id.
+ *  Uses an explicit rank map (EnumMap) instead of enum ordinals,
+ *  so changes in the enum declaration order won't break sorting.
  */
 public final class ByState implements TaskSortStrategy {
 
+    //Maps each state to its rank
     private final Map<TaskState, Integer> rank = new EnumMap<>(TaskState.class);
 
     public ByState() {
@@ -23,14 +26,22 @@ public final class ByState implements TaskSortStrategy {
         rank.put(TaskState.COMPLETED, 2);
     }
 
+    //Get the numeric rank for a state; unknown/null states go to the end.
     private int r(TaskState s) {
         return rank.getOrDefault(s, 99);
     }
 
+    //Null-safe title for comparison (null titles sort as empty string).
     private static String safe(String s) {
         return s == null ? "" : s;
     }
 
+    /**
+     * Comparator:
+     *  - by state rank (TO_DO → IN_PROGRESS → COMPLETED),
+     *  - then by title (case-insensitive),
+     *  - then by id.
+     */
     @Override
     public Comparator<ITask> comparator() {
         return Comparator
