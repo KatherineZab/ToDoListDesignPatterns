@@ -1,15 +1,15 @@
 package viewModel;
 
-import dao.ITasksDAO;
-import dao.ITasksDAOWithIds;
-import dao.TasksDAOException;
-import model.ITask;
-import model.TaskRecord;
-import model.TaskState;
-import model.entity.Priority;
-import model.observable.TasksListener;
-import model.sort.ByPriority;
-import model.sort.ByState;
+import il.ac.hit.project.dao.ITasksDAO;
+import il.ac.hit.project.dao.ITasksDAOWithIds;
+import il.ac.hit.project.dao.TasksDAOException;
+import il.ac.hit.project.model.ITask;
+import il.ac.hit.project.model.TaskRecord;
+import il.ac.hit.project.model.TaskState;
+import il.ac.hit.project.model.entity.Priority;
+import il.ac.hit.project.model.observable.TasksListener;
+import il.ac.hit.project.model.sort.ByPriority;
+import il.ac.hit.project.viewModel.TasksViewModel;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;

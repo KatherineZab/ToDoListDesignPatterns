@@ -1,7 +1,8 @@
 package model.state;
 
-import model.TaskRecord;
-import model.TaskState;
+import il.ac.hit.project.model.entity.Priority;
+import il.ac.hit.project.model.TaskRecord;
+import il.ac.hit.project.model.TaskState;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -79,7 +80,7 @@ class TaskStateTest {
     void taskRecordTransitionValidation() {
         TaskRecord task = new TaskRecord(
                 1, "Test task", "Description",
-                TaskState.TO_DO, model.entity.Priority.NONE
+                TaskState.TO_DO, Priority.NONE
         );
 
         // Valid: TO_DO -> IN_PROGRESS
@@ -99,7 +100,7 @@ class TaskStateTest {
     @DisplayName("Full lifecycle: TO_DO -> IN_PROGRESS -> COMPLETED -> TO_DO")
     void fullLifecycle() {
         TaskRecord task = new TaskRecord(
-                1, "Test", "Desc", TaskState.TO_DO, model.entity.Priority.NONE
+                1, "Test", "Desc", TaskState.TO_DO, Priority.NONE
         );
 
         TaskRecord step1 = task.withState(TaskState.IN_PROGRESS);
@@ -116,13 +117,13 @@ class TaskStateTest {
     @DisplayName("allowedNextStates() matches the transition rules")
     void allowedNextStatesContract() {
         TaskRecord todoTask = new TaskRecord(
-                1, "Test", "Desc", TaskState.TO_DO, model.entity.Priority.NONE
+                1, "Test", "Desc", TaskState.TO_DO, Priority.NONE
         );
         TaskRecord inProgressTask = new TaskRecord(
-                1, "Test", "Desc", TaskState.IN_PROGRESS, model.entity.Priority.NONE
+                1, "Test", "Desc", TaskState.IN_PROGRESS, Priority.NONE
         );
         TaskRecord completedTask = new TaskRecord(
-                1, "Test", "Desc", TaskState.COMPLETED, model.entity.Priority.NONE
+                1, "Test", "Desc", TaskState.COMPLETED, Priority.NONE
         );
 
         assertEquals(1, todoTask.allowedNextStates().size());
@@ -139,7 +140,7 @@ class TaskStateTest {
     @DisplayName("Invalid skip transitions are rejected with an exception")
     void invalidSkipTransitions() {
         TaskRecord task = new TaskRecord(
-                1, "Test", "Desc", TaskState.TO_DO, model.entity.Priority.NONE
+                1, "Test", "Desc", TaskState.TO_DO, Priority.NONE
         );
 
         IllegalStateException ex = assertThrows(IllegalStateException.class,

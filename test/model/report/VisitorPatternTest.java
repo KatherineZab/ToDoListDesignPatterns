@@ -1,8 +1,10 @@
 package model.report;
 
-import model.TaskRecord;
-import model.TaskState;
-import model.entity.Priority;
+import il.ac.hit.project.model.TaskRecord;
+import il.ac.hit.project.model.TaskState;
+import il.ac.hit.project.model.entity.Priority;
+import il.ac.hit.project.model.report.CSVExportVisitor;
+import il.ac.hit.project.model.report.CombinedReportVisitor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

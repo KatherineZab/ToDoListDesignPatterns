@@ -1,7 +1,7 @@
 package model.combinator;
 
-import model.Filters;
-import model.TaskFilter;
+import il.ac.hit.project.model.combinator.Filters;
+import il.ac.hit.project.model.combinator.TaskFilter;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -73,7 +73,7 @@ class TaskFilterTest {
     }
 
 
-    
+
     @Test
     @DisplayName("stateIs matches exactly; 'ALL' behaves like any()")
     void testStateIsFilter() {
