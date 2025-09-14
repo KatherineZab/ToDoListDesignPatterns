@@ -5,21 +5,37 @@ import model.TaskRecord;
 import model.entity.Priority;
 import viewModel.TasksViewModel;
 
-/** Command: שינוי Priority עם Undo/Redo תקין דרך ה-ViewModel. */
+/**
+ * Command that changes a task's priority level.
+ * Remembers the old priority so the change can be undone later.
+ * Uses lazy initialization to capture the original priority only when needed.
+ */
 public final class ChangePriorityCommand implements Command {
     private final TasksViewModel vm;
     private final int id;
     private final Priority newPriority;
 
-    private Priority oldPriority;   // נשמר פעם אחת לצורך undo
+    private Priority oldPriority;   // Stored once for undo purposes
     private boolean initialized = false;
 
+    /**
+     * Creates a command to change a task's priority.
+     * @param vm the ViewModel that handles priority changes
+     * @param id which task to change (must be a valid task ID)
+     * @param newPriority what priority to set (null becomes NONE)
+     */
     public ChangePriorityCommand(TasksViewModel vm, int id, Priority newPriority) {
         this.vm = vm;
         this.id = id;
         this.newPriority = (newPriority == null) ? Priority.NONE : newPriority;
     }
 
+    /**
+     * Changes the task's priority to the new value.
+     * On first run, saves the current priority for undo.
+     * On redo, just applies the new priority again.
+     * @throws RuntimeException if the task doesn't exist or priority change fails
+     */
     @Override
     public void execute() {
         try {
@@ -38,6 +54,11 @@ public final class ChangePriorityCommand implements Command {
         }
     }
 
+    /**
+     * Restores the task's original priority.
+     * Only works if execute() was called first to capture the old value.
+     * @throws RuntimeException if restoring the priority fails
+     */
     @Override
     public void undo() {
         if (!initialized || oldPriority == null) return;
