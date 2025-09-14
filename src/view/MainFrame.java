@@ -3,10 +3,12 @@ package view;
 import viewModel.TasksViewModel;
 import model.TaskState;
 import model.TaskRecord;
+import model.entity.Priority;
 
 import javax.swing.*;
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
+
 
 public class MainFrame extends JFrame {
     private final model.command.CommandManager cmd = new model.command.CommandManager();
@@ -202,11 +204,31 @@ public class MainFrame extends JFrame {
             }
         });
 
-        // Priority (UI convenience)
+        // Priority (עם Undo/Redo דרך Command)
         prio.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
-            tasksPanel.setPriorityForSelected();
+
+            int id = tasksPanel.selectedIdOrMinus1();
+            if (id < 0) {
+                JOptionPane.showMessageDialog(this, "Please select a task first", "No Selection", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+
+            String[] opts = {"NONE","LOW","MEDIUM","HIGH"};
+            String chosen = (String) JOptionPane.showInputDialog(
+                    this, "Select priority:", "Priority",
+                    JOptionPane.PLAIN_MESSAGE, null, opts, "NONE"
+            );
+            if (chosen == null) return; // המשתמש ביטל
+
+            try {
+                cmd.execute(new model.command.ChangePriorityCommand(vm, id, Priority.valueOf(chosen)));
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Failed to update priority: " + ex.getMessage(),
+                        "Error", JOptionPane.ERROR_MESSAGE);
+            }
         });
+
 
         // Undo/Redo
         undo.addActionListener(e -> cmd.undo());
