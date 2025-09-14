@@ -4,6 +4,12 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionListener;
 
+/**
+ * UI panel that provides filtering and sorting controls for tasks.
+ * Part of the View layer in MVVM - handles only UI presentation and
+ * user input collection. Delegates all business logic to parent components
+ * which coordinate with the ViewModel layer.
+ */
 public class FiltersPanel extends JPanel {
 
     private final JTextField query = new JTextField(22);
@@ -12,7 +18,7 @@ public class FiltersPanel extends JPanel {
             new String[]{"ALL", "TO_DO", "IN_PROGRESS", "COMPLETED"}
     );
 
-    // חדש: קומבו למיון
+    // Sort dropdown for ordering tasks
     private final JComboBox<String> sort = new JComboBox<>(
             new String[]{"— None —", "Priority (High→Low)", "State (ToDo→InProgress)"}
     );
@@ -20,11 +26,16 @@ public class FiltersPanel extends JPanel {
     private final JButton apply = new JButton("Apply");
     private final JButton clear = new JButton("Clear");
 
-    // מאזינים שה-MainFrame יכול להגדיר
+    // Action listeners that parent components can set
     private ActionListener applyAction;
     private ActionListener clearAction;
     private ActionListener sortAction;
 
+    /**
+     * Creates the filters panel with all controls and sets up internal event handling.
+     * The Apply button triggers the applyAction, sort changes trigger sortAction immediately,
+     * and Clear resets all fields then triggers clearAction.
+     */
     public FiltersPanel() {
         setLayout(new FlowLayout(FlowLayout.LEFT, 8, 6));
 
@@ -40,17 +51,17 @@ public class FiltersPanel extends JPanel {
         add(apply);
         add(clear);
 
-        // לחיצה על Apply
+        // Apply button - delegates to external action
         apply.addActionListener(e -> {
             if (applyAction != null) applyAction.actionPerformed(e);
         });
 
-        // שינוי בחירת מיון → להפעיל מיד (UX נוח)
+        // Sort selection - triggers immediately for better UX
         sort.addActionListener(e -> {
             if (sortAction != null) sortAction.actionPerformed(e);
         });
 
-        // Clear: איפוס שדות וגם קריאה ללוגיקה החיצונית
+        // Clear - resets all fields then calls external action
         clear.addActionListener(e -> {
             query.setText("");
             state.setSelectedIndex(0); // ALL
@@ -59,18 +70,28 @@ public class FiltersPanel extends JPanel {
         });
     }
 
-    /* ===== Getters קיימים ===== */
+    /**
+     * Gets the current search query text.
+     * @return trimmed text from the search field
+     */
+    public String getQuery() {
+        return query.getText().trim();
+    }
 
-    public String getQuery() { return query.getText().trim(); }
-
-    /** מחזיר "ALL" / "TO_DO" / "IN_PROGRESS" / "COMPLETED" */
+    /**
+     * Gets the selected state filter.
+     * @return "ALL", "TO_DO", "IN_PROGRESS", or "COMPLETED"
+     */
     public String getState() {
         Object x = state.getSelectedItem();
         return x == null ? "ALL" : x.toString();
     }
 
-    /* ===== חדש: מפתח מיון ===== */
-    /** מחזיר "NONE" / "PRIORITY" / "STATE" */
+    /**
+     * Gets the selected sort option as a key.
+     * Converts user-friendly display text to simple keys for logic processing.
+     * @return "NONE", "PRIORITY", or "STATE"
+     */
     public String getSortKey() {
         Object x = sort.getSelectedItem();
         String s = (x == null) ? "— None —" : x.toString();
@@ -80,24 +101,38 @@ public class FiltersPanel extends JPanel {
             default                        -> "NONE";
         };
     }
+
+    /**
+     * Resets the search query and state selector to default values.
+     * Does not trigger any actions - just clears the UI fields.
+     */
     public void reset() {
         query.setText("");
         state.setSelectedIndex(0); // "ALL"
     }
 
-    /* ===== Setters למאזינים (שומרים API קיים + מוסיפים חדשים) ===== */
-
-    /** מאפשר ל-MainFrame לחבר פעולה ל-Apply */
+    /**
+     * Sets the action to execute when Apply button is clicked.
+     * @param l the action listener to call when user applies filters
+     */
     public void setApplyAction(ActionListener l) {
         this.applyAction = l;
     }
 
-    /** חדש: מאזין לשינוי מיון (נקרא בכל שינוי קומבו) */
-    public void setSortAction(ActionListener l) {
-        this.sortAction = l;
-    }
+//    /**
+//     * Sets the action to execute when sort selection changes.
+//     * This is triggered immediately when user changes sort dropdown.
+//     * @param l the action listener to call when sort selection changes
+//     */
+//    public void setSortAction(ActionListener l) {
+//        this.sortAction = l;
+//    }
 
-    /** חדש: מאזין ל-Clear (אחרי שאיפסנו את השדות) */
+    /**
+     * Sets the action to execute after Clear button resets all fields.
+     * Called after the panel has already cleared its own UI elements.
+     * @param l the action listener to call after clearing fields
+     */
     public void setClearAction(ActionListener l) {
         this.clearAction = l;
     }

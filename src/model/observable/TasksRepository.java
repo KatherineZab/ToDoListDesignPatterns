@@ -9,29 +9,59 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Observable hub for tasks list changes.
- * Keeps listeners and notifies them on the Swing EDT with an immutable snapshot.
+ * Central hub for task change notifications using the Observer pattern.
+ * Maintains a list of listeners and ensures they're notified safely on the
+ * Swing EDT with immutable data snapshots. Thread-safe for concurrent access.
  */
 public final class TasksRepository {
+
+    /** Thread-safe listener collection that supports concurrent modifications */
     private final CopyOnWriteArrayList<TasksListener> listeners = new CopyOnWriteArrayList<>();
 
+    /**
+     * Registers a listener to receive task change notifications.
+     * Duplicate listeners are automatically prevented.
+     * @param l the listener to add; null values are ignored
+     */
     public void addListener(TasksListener l) {
         if (l != null) listeners.addIfAbsent(l);
     }
 
+    /**
+     * Unregisters a listener from receiving notifications.
+     * @param l the listener to remove; null values are ignored
+     */
     public void removeListener(TasksListener l) {
         if (l != null) listeners.remove(l);
     }
 
-    /** Notify all listeners with a defensive, unmodifiable snapshot on the EDT. */
+    /**
+     * Notifies all registered listeners with a snapshot of current tasks.
+     * Creates a defensive copy to prevent external modifications and ensures
+     * all notifications happen on the Swing EDT for thread safety.
+     * Swallows individual listener exceptions to prevent one bad listener
+     * from affecting others.
+     * @param current the current tasks list to broadcast
+     */
     public void notifyListeners(List<ITask> current) {
+        // Create immutable defensive copy
         List<ITask> snapshot = Collections.unmodifiableList(new ArrayList<>(current));
-        Runnable r = () -> {
+
+        Runnable notifyTask = () -> {
             for (TasksListener l : listeners) {
-                try { l.onTasksChanged(snapshot); } catch (Throwable ignored) {}
+                try {
+                    l.onTasksChanged(snapshot);
+                } catch (Throwable ignored) {
+                    // Isolate listener failures - don't let one bad listener break others
+                }
             }
         };
-        if (SwingUtilities.isEventDispatchThread()) r.run();
-        else SwingUtilities.invokeLater(r);
+
+        // Ensure EDT execution for safe Swing updates
+        if (SwingUtilities.isEventDispatchThread()) {
+            notifyTask.run();
+        } else {
+            SwingUtilities.invokeLater(notifyTask);
+        }
     }
 }
