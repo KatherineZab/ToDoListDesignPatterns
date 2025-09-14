@@ -1,4 +1,4 @@
-package model.combinator;
+package model;
 
 public final class Filters {
     private Filters() {}
