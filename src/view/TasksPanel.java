@@ -22,54 +22,38 @@ import java.util.Objects;
 
 public class TasksPanel extends JPanel {
 
-    private final DefaultTableModel modelActive = new DefaultTableModel(
+    /* ===== שינוי מרכזי: טבלה אחת במקום שתי טבלאות + לשוניות ===== */
+    private final DefaultTableModel model = new DefaultTableModel(
             new Object[]{"ID","Title","Description","Priority","State"}, 0
     ) { @Override public boolean isCellEditable(int r, int c) { return false; } };
 
-    private final DefaultTableModel modelCompleted = new DefaultTableModel(
-            new Object[]{"ID","Title","Description","Priority","State"}, 0
-    ) { @Override public boolean isCellEditable(int r, int c) { return false; } };
+    private final JTable table = new JTable(model);
 
-    private final JTable tableActive = new JTable(modelActive);
-    private final JTable tableCompleted = new JTable(modelCompleted);
-    private final JTabbedPane tabs = new JTabbedPane();
-
+    /* ===== נשמר: חיבור ל-VM, Observer, currentView ===== */
     private TasksViewModel vm;
     private List<ITask> currentView = java.util.Collections.emptyList();
 
-    // Observer pattern: Listen to ViewModel changes
+    // Subscribe via a dedicated TasksListener (observer lives outside the view)
     private final TasksListener uiListener = this::refreshFromSnapshot;
 
     public TasksPanel() {
         setLayout(new BorderLayout());
 
-        JPanel activeRoot = new JPanel(new BorderLayout());
-        activeRoot.add(new JScrollPane(tableActive), BorderLayout.CENTER);
+        /* ===== שינוי: במקום tabs עם שתי טבלאות, רק JScrollPane אחד ===== */
+        add(new JScrollPane(table), BorderLayout.CENTER);
 
-        JPanel completedRoot = new JPanel(new BorderLayout());
-        completedRoot.add(new JScrollPane(tableCompleted), BorderLayout.CENTER);
-
-        tabs.addTab("Active (ToDo + InProgress)", activeRoot);
-        tabs.addTab("Completed", completedRoot);
-
-        add(tabs, BorderLayout.CENTER);
-
-        // Decorator pattern: Custom renderer for title column
+        // Title renderer (Decorator usage)
         TitleCellRenderer titleRenderer = new TitleCellRenderer();
-        tableActive.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
-        tableCompleted.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
+        table.getColumnModel().getColumn(1).setCellRenderer(titleRenderer);
 
-// NEW: State renderer for both tables (shows badge())
+        // State renderer (badge)
         StateCellRenderer stateRenderer = new StateCellRenderer();
-        tableActive.getColumnModel().getColumn(4).setCellRenderer(stateRenderer);
-        tableCompleted.getColumnModel().getColumn(4).setCellRenderer(stateRenderer);
+        table.getColumnModel().getColumn(4).setCellRenderer(stateRenderer);
 
-        tableActive.setRowHeight(22);
-        tableCompleted.setRowHeight(22);
-
+        table.setRowHeight(22);
     }
 
-    /* ---------------- MVVM Wiring ---------------- */
+    /* ---------------- MVVM wiring ---------------- */
 
     public void setViewModel(TasksViewModel vm) {
         // unsubscribe from previous VM
@@ -99,7 +83,7 @@ public class TasksPanel extends JPanel {
         super.removeNotify();
     }
 
-    /* ---------------- UI Updates (Observer Pattern) ---------------- */
+    /* ---------------- Refresh paths ---------------- */
 
     private void refreshFromVM() {
         if (vm == null) return;
@@ -107,15 +91,16 @@ public class TasksPanel extends JPanel {
     }
 
     private void refreshFromSnapshot(List<ITask> snapshot) {
-        // Pure UI: Just render what ViewModel provides (already filtered/sorted)
-        renderSplit(snapshot);
+        // VM provides a *sorted* snapshot; view renders as-is
+        currentView = snapshot;
+        renderSplit(currentView);
     }
 
-    /* ---------------- Rendering into two tables ---------------- */
+    /* ---------------- Rendering (עוד שומר שם מתודה) ---------------- */
 
+    /** במקום פיצול לשתי טבלאות, ממלאים טבלה אחת. */
     private void renderSplit(List<ITask> list) {
-        modelActive.setRowCount(0);
-        modelCompleted.setRowCount(0);
+        model.setRowCount(0);
 
         for (ITask t : list) {
             Priority p = (t instanceof TaskRecord tr) ? tr.priority() : Priority.NONE;
@@ -123,18 +108,14 @@ public class TasksPanel extends JPanel {
                     t.getId(),
                     t.getTitle(),
                     t.getDescription(),
-                    p.name(),
-                    t.getState().name()
+                    p.name(),                 // משאירים כמחרוזת כדי לא לשבור רנדרר קיים
+                    t.getState().name()       // idem
             };
-            if (t.getState() == TaskState.COMPLETED) {
-                modelCompleted.addRow(row);
-            } else {
-                modelActive.addRow(row);
-            }
+            model.addRow(row);
         }
     }
 
-    /* ---------------- Filtering (UI-only; Combinator) ---------------- */
+    /* ---------------- Filtering (Combinator) ---------------- */
 
     public void applyFilter(String query, String stateNameOrAll) {
         if (vm != null) {
@@ -149,8 +130,7 @@ public class TasksPanel extends JPanel {
         }
     }
 
-
-    /* ---------------- Selection Helpers (Pure UI) ---------------- */
+    /* ---------------- Selection helpers (שומרים חתימות) ---------------- */
 
     public int selectedIdOrMinus1() {
         JTable tbl = selectedTable();
@@ -162,14 +142,14 @@ public class TasksPanel extends JPanel {
         return (val instanceof Integer) ? (Integer) val : Integer.parseInt(val.toString());
     }
 
+    /** תמיד מחזיר את הטבלה היחידה (כדי לא לשנות קריאות קיימות). */
     private JTable selectedTable() {
-        if (tableActive.getSelectedRow() >= 0) return tableActive;
-        if (tableCompleted.getSelectedRow() >= 0) return tableCompleted;
-        return (tabs.getSelectedIndex() == 1) ? tableCompleted : tableActive;
+        return table;
     }
 
+    /** תמיד מחזיר את המודל היחיד (כדי לא לשנות קריאות קיימות). */
     private DefaultTableModel modelOf(JTable t) {
-        return (t == tableActive) ? modelActive : modelCompleted;
+        return model;
     }
 
     /* ---------------- Strategy (sorting) — delegate to VM ---------------- */
@@ -213,7 +193,7 @@ public class TasksPanel extends JPanel {
         }
     }
 
-    /* ---------------- Renderer for Title column (Decorator) ---------------- */
+    /* ---------------- Renderers ---------------- */
 
     private static final class TitleCellRenderer extends DefaultTableCellRenderer {
         private static final Font BASE_FONT = new JLabel().getFont();
@@ -228,11 +208,11 @@ public class TasksPanel extends JPanel {
             DefaultTableModel m = (DefaultTableModel) table.getModel();
 
             String title = Objects.toString(m.getValueAt(modelRow, 1), "");
-            String desc = Objects.toString(m.getValueAt(modelRow, 2), "");
-            Priority pr = safePriority(Objects.toString(m.getValueAt(modelRow, 3), "NONE"));
+            String desc  = Objects.toString(m.getValueAt(modelRow, 2), "");
+            Priority pr  = safePriority(Objects.toString(m.getValueAt(modelRow, 3), "NONE"));
             TaskState st = safeState(Objects.toString(m.getValueAt(modelRow, 4), "TO_DO"));
 
-            // Decorator pattern: Enhance title with priority indicators
+            // Decorator pattern: Enhance title (wrapper that can add logic later)
             ITask rowTask = new TaskRecord(-1, title, desc, st, pr);
             String decoratedTitle = new PriorityDecorator(rowTask, pr).getTitle();
 
@@ -255,10 +235,10 @@ public class TasksPanel extends JPanel {
 
         private static Color colorFor(Priority p) {
             return switch (p) {
-                case HIGH -> new Color(0xC0, 0x00, 0x00);
+                case HIGH   -> new Color(0xC0, 0x00, 0x00);
                 case MEDIUM -> new Color(0xB3, 0x6B, 0x00);
-                case LOW -> new Color(0x66, 0x66, 0x66);
-                default -> Color.BLACK;
+                case LOW    -> new Color(0x66, 0x66, 0x66);
+                default     -> Color.BLACK;
             };
         }
         private static Priority safePriority(String n) {
@@ -268,6 +248,7 @@ public class TasksPanel extends JPanel {
             try { return TaskState.valueOf(n); } catch (Exception e) { return TaskState.TO_DO; }
         }
     }
+
     private static final class StateCellRenderer extends DefaultTableCellRenderer {
         @Override
         public Component getTableCellRendererComponent(
@@ -275,14 +256,11 @@ public class TasksPanel extends JPanel {
             JLabel lbl = (JLabel) super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column);
 
             TaskState st;
-            if (value instanceof TaskState ts) {
-                st = ts;
-            } else {
-                try {
-                    st = TaskState.valueOf(Objects.toString(value, "TO_DO"));
-                } catch (Exception e) {
-                    st = TaskState.TO_DO;
-                }
+            try {
+                // בעמודה שמרנו name(), לכן צריך להמיר חזרה ל-enum
+                st = TaskState.valueOf(Objects.toString(value, "TO_DO"));
+            } catch (Exception e) {
+                st = TaskState.TO_DO;
             }
 
             lbl.setText(st.badge()); // shows friendly text
@@ -290,5 +268,3 @@ public class TasksPanel extends JPanel {
         }
     }
 }
-
-

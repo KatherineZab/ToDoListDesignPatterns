@@ -24,9 +24,22 @@ public class MainFrame extends JFrame {
         add(tasksPanel, BorderLayout.CENTER);
         add(buildCrudBar(), BorderLayout.SOUTH);
 
-        filtersPanel.setApplyAction(e ->
-                tasksPanel.applyFilter(filtersPanel.getQuery(), filtersPanel.getState())
-        );
+        // Apply: גם סינון (כמו קודם) וגם מיון לפי ה-Sort ב-FiltersPanel
+        filtersPanel.setApplyAction(e -> {
+            if (!ensureVmOrWarn()) return;
+
+            // 1) סינון (Combinator ב-VM דרך ה-View)
+            tasksPanel.applyFilter(filtersPanel.getQuery(), filtersPanel.getState());
+
+            // 2) מיון (Strategy ב-VM דרך ה-View)
+            // מצופה שקיים getSortKey() שמחזיר: "PRIORITY" / "STATE" / "NONE"
+            String sortKey = filtersPanel.getSortKey();
+            switch (sortKey) {
+                case "PRIORITY" -> tasksPanel.sortByPriorityHighToLow();
+                case "STATE"    -> tasksPanel.sortByStateToDoFirst();
+                default         -> tasksPanel.clearSort();
+            }
+        });
 
         setSize(900, 600);
         setLocationRelativeTo(null);
@@ -52,16 +65,10 @@ public class MainFrame extends JFrame {
         JButton undo      = new JButton("Undo");
         JButton redo      = new JButton("Redo");
         JButton prio      = new JButton("Priority");
-        JButton sortPrio  = new JButton("Sort: Priority");
-        JButton sortState = new JButton("Sort: State");
-        JButton sortClear = new JButton("Sort: Clear");
         JButton reportBtn = new JButton("Report");
         JButton clearAll  = new JButton("Clear All");
 
         p.add(reportBtn);
-        p.add(sortPrio);
-        p.add(sortState);
-        p.add(sortClear);
         p.add(add);
         p.add(edit);
         p.add(del);
@@ -91,6 +98,7 @@ public class MainFrame extends JFrame {
             }
         });
 
+        // Clear All — Command עם Undo/Redo
         clearAll.addActionListener(e -> {
             if (!ensureVmOrWarn()) return;
             int ok = JOptionPane.showConfirmDialog(
@@ -103,7 +111,6 @@ public class MainFrame extends JFrame {
                 cmd.execute(new model.command.DeleteAllTasksCommand(vm));
             }
         });
-
 
         // EDIT — View -> Command -> ViewModel
         edit.addActionListener(e -> {
@@ -205,10 +212,13 @@ public class MainFrame extends JFrame {
         undo.addActionListener(e -> cmd.undo());
         redo.addActionListener(e -> cmd.redo());
 
-        // Sort buttons now delegate to VM (via TasksPanel tiny patch below)
-        sortPrio.addActionListener(e -> tasksPanel.sortByPriorityHighToLow());
-        sortState.addActionListener(e -> tasksPanel.sortByStateToDoFirst()); // [ADDED]
-        sortClear.addActionListener(e -> tasksPanel.clearSort());
+        // Sort buttons למטה (ללא שינוי)
+        filtersPanel.setClearAction(e -> {
+            if (!ensureVmOrWarn()) return;
+            vm.clearFilter();          // מבטל סינון ב-VM
+            tasksPanel.clearSort();    // מבטל מיון (קורא vm.setSortStrategy(null))
+            filtersPanel.reset();      // מאפס את שדות הפאנל עצמו
+        });
 
         // Reports (Visitor inside VM)
         reportBtn.addActionListener(e -> {
